@@ -67,7 +67,7 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/your-username/redhat-lifecycle-dashboard.git](https://github.com/your-username/redhat-lifecycle-dashboard.git)
+   git clone [https://github.com/explicitworkload/redhat-lifecycle-dashboard.git](https://github.com/explicitworkload/redhat-lifecycle-dashboard.git)
    cd redhat-lifecycle-dashboard
    ```
 
