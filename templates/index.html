@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Hat Lifecycle Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --rh-red: #ee0000;
+            --rh-card-bg: #1e2228;
+            --rh-border: #343a40;
+        }
+        body {
+            background-color: #121519;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+        .badge-eol { background-color: #dc3545; color: white; }
+        .badge-active { background-color: #198754; color: white; }
+        .badge-maint { background-color: #ffc107; color: #000; }
+        .badge-eus { background-color: #0dcaf0; color: #000; }
+
+        .accordion-item {
+            background-color: var(--rh-card-bg);
+            border: 1px solid var(--rh-border);
+            border-left: 4px solid var(--rh-red);
+            border-radius: 6px !important;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+            transition: border-color 0.2s ease;
+        }
+        .accordion-item:hover {
+            border-color: #495057;
+            border-left-color: var(--rh-red);
+        }
+        .accordion-button-rh {
+            background-color: transparent !important;
+            color: #f8f9fa !important;
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+            box-shadow: none !important;
+        }
+        .accordion-button-rh:not(.collapsed) {
+            border-bottom: 1px solid var(--rh-border);
+        }
+        .table-custom {
+            font-size: 0.85rem;
+        }
+        .table-custom th {
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+            color: #adb5bd;
+            background-color: #16191d;
+        }
+    </style>
+</head>
+<body class="text-light d-flex flex-column min-vh-100">
+
+    <div class="container-fluid px-4 py-4 flex-grow-1" style="max-width: 1400px;">
+        <!-- Header -->
+        <header class="pb-3 mb-3 border-bottom border-secondary d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-cpu-fill text-danger fs-3"></i>
+                <h1 class="h4 mb-0 fw-bold">Red Hat Product Lifecycle Dashboard</h1>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions(true)"><i class="bi bi-arrows-expand me-1"></i>Expand All</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions(false)"><i class="bi bi-arrows-collapse me-1"></i>Collapse All</button>
+                <button class="btn btn-danger btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Data</button>
+            </div>
+        </header>
+
+        <!-- Search Bar -->
+        <div class="row mb-3">
+            <div class="col-12 col-md-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
+                    <input type="text" id="searchInput" class="form-control bg-dark text-light border-secondary" placeholder="Search products or version numbers (e.g. RHEL, 2.4, OpenShift)..." onkeyup="filterProducts()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Disclaimer Banner -->
+        <div class="alert alert-dark border-secondary d-flex align-items-center mb-4 py-2 px-3 small" role="alert">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2 fs-5"></i>
+            <div>
+                <strong>Disclaimer:</strong> Dates displayed here are dynamically fetched for summary tracking. Users should always reference official <a href="https://access.redhat.com/product-life-cycles/update_policies" target="_blank" rel="noopener noreferrer" class="link-danger text-decoration-underline">Red Hat lifecycle policy pages</a> linked in each product card.
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="loading" class="text-center py-5">
+            <div class="spinner-border text-danger" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-secondary small">Fetching live feeds from Red Hat Product Life Cycles API...</p>
+        </div>
+
+        <!-- Accordion Container -->
+        <div id="accordionContainer" class="accordion d-none"></div>
+    </div>
+
+    <!-- Author Footnote Credit -->
+    <footer class="py-3 my-3 border-top border-secondary text-center text-secondary small">
+        Maintained by <strong>John</strong> &bull; Want to add more Red Hat products to this dashboard? Reach out via email at <a href="mailto:me@kubernetes.day" class="link-light text-decoration-none fw-semibold">me@kubernetes.day</a>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function loadData() {
+            document.getElementById('loading').classList.remove('d-none');
+            const container = document.getElementById('accordionContainer');
+            container.classList.add('d-none');
+
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+                
+                container.innerHTML = '';
+
+                data.products.forEach((prod, index) => {
+                    let tableRows = '';
+                    const nameLower = prod.product_name.toLowerCase();
+                    const isRhelAi = nameLower === "red hat enterprise linux ai";
+                    const isRhel = nameLower === "red hat enterprise linux";
+                    const isAap = nameLower.includes("ansible automation platform");
+                    const isRhoai = nameLower.includes("openshift ai");
+                    const isQuay = nameLower.includes("quay");
+                    const isKeycloak = nameLower.includes("keycloak");
+                    const isJboss = nameLower.includes("jboss enterprise application platform");
+                    const isDataGrid = nameLower.includes("data grid");
+                    const isEdgeMgr = nameLower.includes("edge manager");
+                    const isMicroshift = nameLower.includes("microshift");
+
+                    prod.versions.forEach(v => {
+                        let badgeClass = 'badge-active';
+                        const typeLower = v.type.toLowerCase();
+                        if (typeLower.includes('end of life')) badgeClass = 'badge-eol';
+                        else if (typeLower.includes('maintenance')) badgeClass = 'badge-maint';
+                        else if (typeLower.includes('extended')) badgeClass = 'badge-eus';
+
+                        if (isRhelAi) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
+                        } else if (isRhel) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
+                        } else if (isAap) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
+                        } else if (isQuay) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
+                        } else if (isEdgeMgr) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                        } else if (isMicroshift) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
+                        } else if (isRhoai) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
+                        } else if (isKeycloak) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                        } else if (isJboss) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                        } else if (isDataGrid) {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                        } else {
+                            tableRows += `<tr><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span></td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
+                        }
+                    });
+
+                    const accordionId = `collapseProduct${index}`;
+                    const isExpanded = index < 2;
+                    const showClass = isExpanded ? 'show' : '';
+                    const buttonCollapsedClass = isExpanded ? '' : 'collapsed';
+
+                    let tableHeaders = '';
+                    if (isRhelAi) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>End of Life</th>`;
+                    } else if (isRhel) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Cycle (ELC)</th><th>Long-Life Add-On</th><th>Final Minor Release</th>`;
+                    } else if (isAap) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support 1</th><th>Maintenance Support 2</th><th>Extended Update Support</th><th>Extended Update Support Term 2</th><th>ELS Add-On</th>`;
+                    } else if (isQuay) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>OpenShift Aligned Version</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>EUS Term 1</th><th>EUS Term 2</th><th>EUS Term 3</th>`;
+                    } else if (isEdgeMgr) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th>`;
+                    } else if (isMicroshift) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Update Support</th><th>Extended Update Support Term 2</th>`;
+                    } else if (isRhoai) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Extended Update Support</th>`;
+                    } else if (isKeycloak) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th>`;
+                    } else if (isJboss) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th><th>Extended Life Support (ELS) 2</th>`;
+                    } else if (isDataGrid) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th><th>Extended Life Support (ELS) 2</th>`;
+                    } else {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>EUS Term 1</th><th>EUS Term 2</th><th>EUS Term 3</th><th>Extended Life Phase</th>`;
+                    }
+
+                    const accordionHtml = `
+                        <div class="accordion-item product-card">
+                            <h2 class="accordion-header" id="heading${index}">
+                                <button class="accordion-button accordion-button-rh ${buttonCollapsedClass} d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#${accordionId}" aria-expanded="${isExpanded}" aria-controls="${accordionId}">
+                                    <span>${prod.product_name}</span>
+                                    <span class="badge bg-secondary me-3 small font-monospace">${prod.versions.length} versions</span>
+                                </button>
+                            </h2>
+                            <div id="${accordionId}" class="accordion-collapse collapse ${showClass}" aria-labelledby="heading${index}">
+                                <div class="accordion-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-hover table-striped mb-0 align-middle table-custom">
+                                            <thead><tr>${tableHeaders}</tr></thead>
+                                            <tbody>${tableRows}</tbody>
+                                        </table>
+                                    </div>
+                                    <div class="bg-dark p-2 px-3 border-top border-secondary text-end">
+                                        <a href="${prod.official_link}" target="_blank" rel="noopener noreferrer" class="link-danger text-decoration-none small">
+                                            Official ${prod.product_name} Lifecycle Policy <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += accordionHtml;
+                });
+
+                document.getElementById('loading').classList.add('d-none');
+                container.classList.remove('d-none');
+            } catch (err) {
+                console.error("Failed to load lifecycle data", err);
+            }
+        }
+
+        function toggleAllAccordions(expand) {
+            const collapseElements = document.querySelectorAll('.accordion-collapse');
+            collapseElements.forEach(el => {
+                const bsCollapse = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+                if (expand) bsCollapse.show();
+                else bsCollapse.hide();
+            });
+        }
+
+        function filterProducts() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.product-card');
+
+            cards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                if (text.includes(query)) {
+                    card.classList.remove('d-none');
+                } else {
+                    card.classList.add('d-none');
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", loadData);
+    </script>
+</body>
+</html>
