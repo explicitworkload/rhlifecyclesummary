@@ -1,0 +1,17 @@
+services:
+  rh-lifecycle-dashboard:
+    #build:
+    #  context: .
+    #  dockerfile: Dockerfile
+    image: quay.io/jgoh/rhlifecyclesummary:latest
+    container_name: rh-dashboard
+    ports:
+    - "8881:8881"
+    restart: always
+    environment:
+    - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8881/" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3

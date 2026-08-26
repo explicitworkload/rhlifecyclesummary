@@ -17,6 +17,6 @@ COPY templates/ ./templates/
 RUN useradd -u 1001 appuser && chown -R appuser:appuser /app
 USER 1001
 
-EXPOSE 8080
+EXPOSE 8881
 
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8881"]
