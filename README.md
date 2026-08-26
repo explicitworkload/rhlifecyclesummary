@@ -60,15 +60,6 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 │   └── index.html        # Responsive frontend template with Bootstrap 5
 └── README.md             # Project documentation
 ```
----
-
-## 🚀 Quickstart
-
-### Prerequisites
-
-Ensure you have one of the following installed on your system:
-* [Podman](https://podman.io/) & `podman-compose` (Recommended)
-* [Docker](https://www.docker.com/) & `docker-compose`
 
 ---
 
@@ -99,13 +90,6 @@ Ensure you have one of the following installed on your system:
     ```
     podman run -d -p 8881:8881 --name rh-dashboard rh-lifecycle-dashboard
     ```
-
-## 📊 Endpoints
-
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/` | `GET` | Serves the web dashboard UI |
-| `/api/data` | `GET` | Returns aggregated JSON lifecycle payload directly from Red Hat feeds |
 
 ---
 
