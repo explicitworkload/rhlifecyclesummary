@@ -93,6 +93,15 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 ---
 
+## 📊 Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/` | `GET` | Serves the web dashboard UI |
+| `/api/data` | `GET` | Returns aggregated JSON lifecycle payload directly from Red Hat feeds |
+
+---
+
 ## ⚠️ Disclaimer
 
 Dates displayed in this dashboard are dynamically fetched for summary and monitoring purposes. Platform users should always consult official [Red Hat Product Update Policies](https://access.redhat.com/product-life-cycles/update_policies) linked within each product card for binding support guarantees and EUS SLAs.
