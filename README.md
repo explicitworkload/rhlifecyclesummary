@@ -67,8 +67,8 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/explicitworkload/redhat-lifecycle-dashboard.git](https://github.com/explicitworkload/redhat-lifecycle-dashboard.git)
-   cd redhat-lifecycle-dashboard
+   git clone https://github.com/explicitworkload/rhlifecyclesummary.git
+   cd rhlifecyclesummary
    ```
 
 2. **Start the service:**
@@ -108,9 +108,9 @@ Dates displayed in this dashboard are dynamically fetched for summary and monito
 
 ---
 
-## 👨‍💻 Maintainer & Contact
+## 👨‍💻 Maintainer
 
-Maintained with ❤️ by **John**  
+Maintained with by **John**  
 📧 **Email:** [me@kubernetes.day](mailto:me@kubernetes.day)  
 
 *Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
