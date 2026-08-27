@@ -45,23 +45,30 @@ PRODUCTS_CONFIG = {
     "Red Hat build of MicroShift": {
         "link": "https://access.redhat.com/support/policy/updates/microshift"
     },
+    "Red Hat OpenStack Platform": {
+        "link": "https://access.redhat.com/support/policy/updates/openstack/platform"
+    },
 }
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 
 
-def extract_end_date(phase_data):
-    """Extracts raw end date string for calculation."""
+def extract_dates(phase_data):
+    """Extracts start and end date tuple string for comparison."""
     if not phase_data or isinstance(phase_data, str):
+        return None, None
+    s = phase_data.get("start_date")
+    e = phase_data.get("end_date") or phase_data.get("date")
+
+    def clean(val):
+        if val and len(val) >= 10 and val[4] == "-" and val[7] == "-":
+            return val[:10]
         return None
-    val = phase_data.get("end_date") or phase_data.get("date")
-    if val and len(val) >= 10 and val[4] == "-" and val[7] == "-":
-        return val[:10]
-    return None
+
+    return clean(s), clean(e)
 
 
 def calculate_days_remaining(end_date_str):
-    """Calculates days remaining from today until the end date."""
     if not end_date_str:
         return None
     try:
@@ -76,29 +83,16 @@ def calculate_days_remaining(end_date_str):
 def format_phase_date(phase_data):
     if not phase_data:
         return "N/A"
-
     if isinstance(phase_data, str):
         return phase_data
 
-    start = phase_data.get("start_date")
-    end = phase_data.get("end_date") or phase_data.get("date")
-
-    def clean_date_str(val):
-        if not val or val == "N/A":
-            return None
-        if len(val) >= 10 and val[4] == "-" and val[7] == "-":
-            return val[:10]
-        return val
-
-    start_str = clean_date_str(start)
-    end_str = clean_date_str(end)
-
-    if start_str and end_str and start_str != end_str:
-        return f"{start_str} to {end_str}"
-    elif end_str:
-        return end_str
-    elif start_str:
-        return start_str
+    start, end = extract_dates(phase_data)
+    if start and end and start != end:
+        return f"{start} to {end}"
+    elif end:
+        return end
+    elif start:
+        return start
     return "N/A"
 
 
@@ -127,6 +121,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
             phases_map = {
                 "ga": None,
                 "full": None,
+                "third_party": None,
                 "maint": None,
                 "maint1": None,
                 "maint2": None,
@@ -138,6 +133,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                 "els": None,
                 "els1": None,
                 "els2": None,
+                "els3": None,
                 "eol": None,
             }
 
@@ -148,22 +144,28 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     phases_map["ga"] = phase
                 elif "full support" in p_name:
                     phases_map["full"] = phase
+                elif "third-party" in p_name or "third party" in p_name:
+                    phases_map["third_party"] = phase
                 elif "maintenance support 1" in p_name:
                     phases_map["maint1"] = phase
                 elif "maintenance support 2" in p_name:
                     phases_map["maint2"] = phase
                 elif "maintenance" in p_name:
                     phases_map["maint"] = phase
+                elif "term 3" in p_name and ("extended update" in p_name or "els" in p_name):
+                    phases_map["eus3"] = phase
+                    phases_map["els3"] = phase
+                elif "term 2" in p_name and ("extended update" in p_name or "els" in p_name):
+                    phases_map["eus2"] = phase
+                    phases_map["els2"] = phase
                 elif "term 1" in p_name and "extended update" in p_name:
                     phases_map["eus1"] = phase
-                elif "term 2" in p_name and "extended update" in p_name:
-                    phases_map["eus2"] = phase
-                elif "term 3" in p_name and "extended update" in p_name:
-                    phases_map["eus3"] = phase
                 elif "extended update support" in p_name and not phases_map["eus1"]:
                     phases_map["eus1"] = phase
-                elif "els 1" in p_name or "els (1)" in p_name or "els phase 1" in p_name:
+                elif "els 1" in p_name or "els (1)" in p_name or "els phase 1" in p_name or ("els" in p_name and "add-on" in p_name):
                     phases_map["els1"] = phase
+                    if not phases_map["els"]:
+                        phases_map["els"] = phase
                 elif "els 2" in p_name or "els (2)" in p_name or "els phase 2" in p_name:
                     phases_map["els2"] = phase
                 elif "extended life cycle" in p_name or "elc" in p_name or "els" in p_name:
@@ -177,10 +179,17 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                 elif "end of life" in p_name or "eol" in p_name:
                     phases_map["eol"] = phase
 
-            # Pick primary phase end date to evaluate urgency
-            target_phase = phases_map["maint"] or phases_map["full"] or phases_map["eus1"] or phases_map["eol"]
-            raw_end = extract_end_date(target_phase)
+            # Target active end date for urgency calculation
+            target_phase = phases_map["maint2"] or phases_map["maint1"] or phases_map["maint"] or phases_map["full"] or phases_map["eus1"] or phases_map["eol"]
+            _, raw_end = extract_dates(target_phase)
             days_remaining = calculate_days_remaining(raw_end)
+
+            # Extract raw phase date ranges for client-side status calculation
+            phase_ranges = {}
+            for k, p_data in phases_map.items():
+                s, e = extract_dates(p_data)
+                if s or e:
+                    phase_ranges[k] = {"start": s, "end": e}
 
             parsed_versions.append(
                 {
@@ -190,8 +199,10 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     "ocp_compat": ocp_compat,
                     "ocp_aligned": ocp_aligned,
                     "days_remaining": days_remaining,
+                    "phase_ranges": phase_ranges,
                     "ga": format_phase_date(phases_map["ga"]),
                     "full": format_phase_date(phases_map["full"]),
+                    "third_party": format_phase_date(phases_map["third_party"]),
                     "maint": format_phase_date(phases_map["maint"]),
                     "maint1": format_phase_date(phases_map["maint1"]),
                     "maint2": format_phase_date(phases_map["maint2"]),
@@ -203,6 +214,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     "els": format_phase_date(phases_map["els"]),
                     "els1": format_phase_date(phases_map["els1"]),
                     "els2": format_phase_date(phases_map["els2"]),
+                    "els3": format_phase_date(phases_map["els3"]),
                     "eol": format_phase_date(phases_map["eol"]),
                     "final_minor": final_minor,
                 }

@@ -78,8 +78,7 @@
                     <i class="bi bi-github me-1"></i> GitHub
                 </a>
                 <button id="expiringFilterBtn" class="btn btn-outline-warning btn-sm" onclick="toggleExpiringFilter()"><i class="bi bi-exclamation-triangle me-1"></i>Expiring Soon (< 120d)</button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions(true)"><i class="bi bi-arrows-expand me-1"></i>Expand All</button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions(false)"><i class="bi bi-arrows-collapse me-1"></i>Collapse All</button>
+                <button id="toggleAccordionsBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions()"><i class="bi bi-arrows-expand me-1"></i>Expand All</button>
                 <button class="btn btn-danger btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Data</button>
             </div>
         </header>
@@ -122,6 +121,37 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let showOnlyExpiring = false;
+        let isAllExpanded = false;
+
+        function determineRealStatus(v) {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const pr = v.phase_ranges || {};
+
+            function isCurrent(phaseKey) {
+                if (!pr[phaseKey]) return false;
+                const s = pr[phaseKey].start;
+                const e = pr[phaseKey].end;
+                if (s && e) return todayStr >= s && todayStr <= e;
+                if (s) return todayStr >= s;
+                if (e) return todayStr <= e;
+                return false;
+            }
+
+            if (isCurrent('els') || isCurrent('els1') || isCurrent('els2') || isCurrent('els3') || isCurrent('elc')) {
+                return 'Extended Life Support';
+            }
+            if (isCurrent('eus1') || isCurrent('eus2') || isCurrent('eus3')) {
+                return 'Extended Update Support';
+            }
+            if (isCurrent('maint') || isCurrent('maint1') || isCurrent('maint2')) {
+                return 'Maintenance Support';
+            }
+            if (isCurrent('full')) {
+                return 'Full Support';
+            }
+
+            return v.type;
+        }
 
         function getUrgencyBadge(days) {
             if (days === null || days === undefined || days < 0) return '';
@@ -146,6 +176,7 @@
                 data.products.forEach((prod, index) => {
                     let tableRows = '';
                     const nameLower = prod.product_name.toLowerCase();
+                    const isOpenstack = nameLower.includes("openstack");
                     const isRhelAi = nameLower === "red hat enterprise linux ai";
                     const isRhel = nameLower === "red hat enterprise linux";
                     const isAap = nameLower.includes("ansible automation platform");
@@ -160,11 +191,13 @@
                     let hasExpiringVersions = false;
 
                     prod.versions.forEach(v => {
+                        const realStatus = determineRealStatus(v);
                         let badgeClass = 'badge-active';
-                        const typeLower = v.type.toLowerCase();
-                        if (typeLower.includes('end of life')) badgeClass = 'badge-eol';
-                        else if (typeLower.includes('maintenance')) badgeClass = 'badge-maint';
-                        else if (typeLower.includes('extended')) badgeClass = 'badge-eus';
+                        const statusLower = realStatus.toLowerCase();
+
+                        if (statusLower.includes('end of life')) badgeClass = 'badge-eol';
+                        else if (statusLower.includes('maintenance')) badgeClass = 'badge-maint';
+                        else if (statusLower.includes('extended')) badgeClass = 'badge-eus';
 
                         const urgencyBadge = getUrgencyBadge(v.days_remaining);
                         const isExpiringSoon = v.days_remaining !== null && v.days_remaining >= 0 && v.days_remaining <= 120;
@@ -172,28 +205,30 @@
 
                         const rowClass = isExpiringSoon ? 'expiring-row' : '';
 
-                        if (isRhelAi) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
+                        if (isOpenstack) {
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td><td>${v.els3}</td></tr>`;
+                        } else if (isRhelAi) {
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
                         } else if (isRhel) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
                         } else if (isAap) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
                         } else if (isQuay) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
                         } else if (isEdgeMgr) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
                         } else if (isMicroshift) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
                         } else if (isRhoai) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
                         } else if (isKeycloak) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
                         } else if (isJboss) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
                         } else if (isDataGrid) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
                         } else {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${v.type}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
                         }
                     });
 
@@ -203,7 +238,9 @@
                     const buttonCollapsedClass = isExpanded ? '' : 'collapsed';
 
                     let tableHeaders = '';
-                    if (isRhelAi) {
+                    if (isOpenstack) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Third-Party Certification</th><th>Maintenance Support</th><th>ELS Add-On</th><th>ELS Term 2 Add-On</th><th>ELS Term 3 Add-On</th>`;
+                    } else if (isRhelAi) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>End of Life</th>`;
                     } else if (isRhel) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Cycle (ELC)</th><th>Long-Life Add-On</th><th>Final Minor Release</th>`;
@@ -280,13 +317,31 @@
             filterProducts();
         }
 
-        function toggleAllAccordions(expand) {
+        function toggleAllAccordions(forceState = null) {
+            if (typeof forceState === 'boolean') {
+                isAllExpanded = forceState;
+            } else {
+                isAllExpanded = !isAllExpanded;
+            }
+
             const collapseElements = document.querySelectorAll('.accordion-collapse');
             collapseElements.forEach(el => {
                 const bsCollapse = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
-                if (expand) bsCollapse.show();
-                else bsCollapse.hide();
+                if (isAllExpanded) {
+                    bsCollapse.show();
+                } else {
+                    bsCollapse.hide();
+                }
             });
+
+            const btn = document.getElementById('toggleAccordionsBtn');
+            if (btn) {
+                if (isAllExpanded) {
+                    btn.innerHTML = '<i class="bi bi-arrows-collapse me-1"></i>Collapse All';
+                } else {
+                    btn.innerHTML = '<i class="bi bi-arrows-expand me-1"></i>Expand All';
+                }
+            }
         }
 
         function filterProducts() {
