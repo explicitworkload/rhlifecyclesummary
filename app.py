@@ -181,14 +181,14 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     phases_map["maint2"] = phase
                 elif "maintenance" in p_name:
                     phases_map["maint"] = phase
-                # --- Specific RHEL Phase Matches ---
+                # Specific RHEL Phase Matches
                 elif "extended life cycle support" in p_name or "els) add-on" in p_name:
                     phases_map["elc"] = phase
                     phases_map["els1"] = phase
                     phases_map["els"] = phase
                 elif "extended life phase" in p_name:
                     phases_map["long_life"] = phase
-                # --- EUS & Other ELS Term Matches ---
+                # EUS & ELS Term Matches
                 elif "els term 3" in p_name or "els 3" in p_name or "els (3)" in p_name:
                     phases_map["els3"] = phase
                 elif "extended update support term 3" in p_name or "eus term 3" in p_name:
@@ -208,7 +208,6 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     phases_map["long_life"] = phase
                 elif "end of life" in p_name or "eol" in p_name:
                     phases_map["eol"] = phase
-
 
             # Target active end date for urgency calculation
             target_phase = phases_map["maint2"] or phases_map["maint1"] or phases_map["maint"] or phases_map["full"] or phases_map["eus1"] or phases_map["eol"]
@@ -250,6 +249,16 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     "final_minor": final_minor,
                 }
             )
+
+        # Sort versions from newest to oldest by GA date
+        def get_sort_key(v):
+            ga_str = v.get("ga") or ""
+            if len(ga_str) >= 10 and ga_str[0].isdigit():
+                return ga_str[:10]
+            ver_clean = "".join([c for c in v.get("name", "") if c.isdigit() or c == "."])
+            return ver_clean
+
+        parsed_versions.sort(key=get_sort_key, reverse=True)
 
         return {
             "product_name": product_name,
