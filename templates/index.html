@@ -67,6 +67,24 @@
             white-space: pre-line;
             max-width: 250px;
         }
+        /* Force status cells to stay on a single line */
+        .table-custom td.status-col {
+            white-space: nowrap !important;
+        }
+        .btn-calendar-icon {
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin: 0 0 0 4px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .btn-calendar-icon:hover i {
+            filter: brightness(1.25);
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body class="text-light d-flex flex-column min-vh-100">
@@ -234,30 +252,55 @@
 
                         const rowClass = isExpiringSoon ? 'expiring-row' : '';
 
+                        // Exclude Calendar Feature for "End of Life" and "End of Maintenance"
+                        const isExcludedFromCalendar = statusLower.includes('end of life') || statusLower.includes('end of maintenance');
+
+                        const activeTargetDate = v.phase_ranges?.maint2?.end || v.phase_ranges?.maint1?.end || v.phase_ranges?.maint?.end || v.phase_ranges?.full?.end || v.phase_ranges?.eus1?.end || '';
+
+                        let calendarBtnHtml = '';
+                        if (!isExcludedFromCalendar && activeTargetDate) {
+                            const escapedProdName = prod.product_name.replace(/'/g, "\\'");
+                            const escapedVerName = v.name.replace(/'/g, "\\'");
+                            const escapedStatus = realStatus.replace(/'/g, "\\'");
+                            const escapedLink = (prod.official_link || '').replace(/'/g, "\\'");
+
+                            calendarBtnHtml = `
+                                <button type="button" 
+                                        class="btn-calendar-icon" 
+                                        title="Export .ics Calendar Event (120/90/60/30d Alarms)" 
+                                        onclick="downloadIcsCalendar('${escapedProdName}', '${escapedVerName}', '${activeTargetDate}', '${escapedStatus}', '${escapedLink}')">
+                                    <i class="bi bi-calendar-plus text-warning"></i>
+                                </button>
+                            `;
+                        }
+
+                        const versionCell = `<td class="fw-bold">${v.name}</td>`;
+                        const statusCell = `<td class="status-col"><div class="d-inline-flex align-items-center gap-1"><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}${calendarBtnHtml}</div></td>`;
+
                         if (isOpenstack) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td><td>${v.els3}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td><td>${v.els3}</td></tr>`;
                         } else if (isRhelAi) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
                         } else if (isRhel) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
                         } else if (isAap) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
                         } else if (isQuay) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
                         } else if (isEdgeMgr) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
                         } else if (isMicroshift) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
                         } else if (isRhoai) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
                         } else if (isKeycloak) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
                         } else if (isJboss) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
                         } else if (isDataGrid) {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
                         } else {
-                            tableRows += `<tr class="${rowClass}"><td class="fw-bold">${v.name}</td><td><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
                         }
                     });
 
@@ -387,6 +430,85 @@
                     card.classList.add('d-none');
                 }
             });
+        }
+
+        function downloadIcsCalendar(productName, version, endDateStr, currentStatus, officialLink) {
+            if (!endDateStr || endDateStr === 'N/A' || endDateStr.includes('Ongoing')) {
+                alert("No valid expiration date available for calendar export.");
+                return;
+            }
+
+            const dateParts = endDateStr.split('-');
+            if (dateParts.length < 3) {
+                alert("Invalid date format for calendar export.");
+                return;
+            }
+
+            const year = dateParts[0];
+            const month = dateParts[1];
+            const day = dateParts[2].slice(0, 2);
+
+            const dtStart = `${year}${month}${day}T090000Z`;
+            const dtEnd = `${year}${month}${day}T100000Z`;
+            const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+            const uid = `rh-lifecycle-${productName.replace(/\s+/g, '-')}-${version}-${dtStart}@dashboard`;
+            const policyUrl = officialLink || "https://access.redhat.com/product-life-cycles/update_policies";
+            const siteUrl = "https://rhlifecycle.kubernetes.day/";
+
+            const descriptionText = `${productName} ${version} — ${currentStatus} Phase Expiry (${endDateStr}).\\n\\n` +
+                `Red Hat Product Lifecycle Dashboard:\\n👉 ${siteUrl}\\n\\n` +
+                `Official Policy:\\n${policyUrl}`;
+
+            const icsContent = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Red Hat Lifecycle Dashboard//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:PUBLISH',
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${now}`,
+                `DTSTART:${dtStart}`,
+                `DTEND:${dtEnd}`,
+                `SUMMARY:EOL Warning: ${productName} ${version}`,
+                `DESCRIPTION:${descriptionText}`,
+                `URL:${siteUrl}`,
+                // 120 Days Before
+                'BEGIN:VALARM',
+                'TRIGGER:-P120D',
+                'ACTION:DISPLAY',
+                `DESCRIPTION:Reminder: ${productName} ${version} expires in 120 days (${endDateStr})`,
+                'END:VALARM',
+                // 90 Days Before
+                'BEGIN:VALARM',
+                'TRIGGER:-P90D',
+                'ACTION:DISPLAY',
+                `DESCRIPTION:Reminder: ${productName} ${version} expires in 90 days (${endDateStr})`,
+                'END:VALARM',
+                // 60 Days Before
+                'BEGIN:VALARM',
+                'TRIGGER:-P60D',
+                'ACTION:DISPLAY',
+                `DESCRIPTION:Reminder: ${productName} ${version} expires in 60 days (${endDateStr})`,
+                'END:VALARM',
+                // 30 Days Before
+                'BEGIN:VALARM',
+                'TRIGGER:-P30D',
+                'ACTION:DISPLAY',
+                `DESCRIPTION:Urgent: ${productName} ${version} expires in 30 days (${endDateStr})`,
+                'END:VALARM',
+                'END:VEVENT',
+                'END:VCALENDAR'
+            ].join('\r\n');
+
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.setAttribute('download', `${productName}_${version}_lifecycle.ics`.replace(/\s+/g, '_'));
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         document.addEventListener("DOMContentLoaded", loadData);
