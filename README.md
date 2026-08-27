@@ -1,6 +1,6 @@
 # 🚀 Red Hat Product Lifecycle Dashboard
 
-An open-source, lightweight containerized web application that aggregates real-time lifecycle support dates across the Red Hat product ecosystem. Built with Python (FastAPI) and a modern dark-mode Bootstrap interface, this tool helps platform engineers, DevOps teams, and SREs stay ahead of End-of-Life (EOL) timelines and Extended Update Support (EUS) windows.
+An interactive, live dashboard that aggregates and tracks end-of-life (EOL), support phase transitions, and active update windows across Red Hat products. Built with FastAPI and vanilla JavaScript, it consumes the official Red Hat Product Life Cycles API to give system administrators, platform engineers, and enterprise architects a unified view of their infrastructure's support status.
 
 ![lifecycle-dashboard](images/rhlifecycle-dashboard.png)
 
@@ -12,22 +12,41 @@ An open-source, lightweight containerized web application that aggregates real-t
 
 ---
 
-## 🌟 Key Features
+## 🌟 Features
 
-* **⚡ Real-Time Lifecycle Tracking:** Queries official feeds directly from the Red Hat Product Life Cycles API.
-* **📦 Broad Product Coverage:** Out-of-the-box tracking for RHEL, RHEL AI, OpenShift (OCP), OpenShift AI (RHOAI), Ansible Automation Platform (AAP), Red Hat Quay, Keycloak, Red Hat SSO, JBoss EAP, Data Grid, Edge Manager, and MicroShift.
-* **🎨 Visual Status Indicators:** Clear color-coded status badges for active Full Support, Maintenance Support, EUS/ELS terms, and End-of-Life (EOL).
-* **🔍 Instant Live Search:** Search across all product names or specific version numbers (e.g., `2.4`, `OpenShift`, `8.6`) in real time.
-* **📱 Responsive & Collapsible UI:** Compact accordion-based layout with single-click "Expand All" and "Collapse All" controls.
-* **🔒 Enterprise Ready:** Packaged as a rootless containerized app ready for deployment on Podman, Docker, Kubernetes, or Red Hat OpenShift.
+- **⚡ Real-Time API Data:** Automatically pulls support lifecycle phases directly from Red Hat's public API endpoints.
+- **🏷️ Dynamic Status Resolution:** Accurately evaluates live phase windows (Full Support, Extended Update Support, Maintenance Support, End of Maintenance, and End of Life) based on current dates.
+- **📅 .ics Calendar Export (With Alarms):** Download calendar events (`.ics`) for active product versions directly into Outlook, Google Calendar, or Apple Calendar. Includes built-in alert triggers for **120, 90, 60, and 30 days** prior to expiration.
+- **⏳ EOL Urgency Counters:** Visual badges automatically flag versions nearing support expiration within 120 days.
+- **🔍 Quick Filter & Search:** Easily search by product name, major version, or minor version numbers.
+- **📱 Responsive UI:** Built with Bootstrap 5 in a dark enterprise theme.
+
+---
+
+## 🛠️ Supported Products
+
+- **Red Hat Enterprise Linux (RHEL)** *(Includes ELC, Long-Life Add-On, and Final Minor Release tracking)*
+- **Red Hat Enterprise Linux AI (RHEL AI)**
+- **Red Hat build of Keycloak** *(Includes dependency note support)*
+- **Red Hat Ansible Automation Platform (AAP)** *(Term 1 & Term 2 EUS resolution)*
+- **Red Hat OpenShift Container Platform (OCP)**
+- **Red Hat OpenShift AI Self-Managed**
+- **Red Hat Quay**
+- **Red Hat Single Sign-On**
+- **Red Hat JBoss Enterprise Application Platform**
+- **Red Hat Data Grid**
+- **Red Hat Edge Manager**
+- **Red Hat build of MicroShift**
+- **Red Hat OpenStack Platform**
+*Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Backend:** Python 3.12, FastAPI, `httpx` (async API client)
-* **Frontend:** HTML5, Modern Dark CSS, Bootstrap 5.3, Bootstrap Icons
-* **Deployment:** Podman / Docker, `podman-compose`
+- **Backend:** Python 3.12+, FastAPI, `httpx` (Asynchronous API client), Jinja2
+- **Frontend:** Vanilla JS (ES6+), Bootstrap 5, Bootstrap Icons
+- **Data Source:** [Red Hat Product Life Cycles API](https://access.redhat.com/product-life-cycles/api/v1/products)
 
 ## 🐳 Quickstart
 
@@ -104,7 +123,7 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 ## ⚠️ Disclaimer
 
-Dates displayed in this dashboard are dynamically fetched for summary and monitoring purposes. Platform users should always consult official [Red Hat Product Update Policies](https://access.redhat.com/product-life-cycles/update_policies) linked within each product card for binding support guarantees and EUS SLAs.
+Disclaimer: Dates displayed on this dashboard are dynamically fetched for summary tracking. Always reference official  [Red Hat Product Update Policies](https://access.redhat.com/product-life-cycles/update_policies) linked in each product card for definitive support terms.
 
 ---
 
@@ -113,4 +132,3 @@ Dates displayed in this dashboard are dynamically fetched for summary and monito
 Maintained with by **John**  
 📧 **Email:** [me@kubernetes.day](mailto:me@kubernetes.day)  
 
-*Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
