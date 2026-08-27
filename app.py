@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -47,6 +48,29 @@ PRODUCTS_CONFIG = {
 }
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
+
+
+def extract_end_date(phase_data):
+    """Extracts raw end date string for calculation."""
+    if not phase_data or isinstance(phase_data, str):
+        return None
+    val = phase_data.get("end_date") or phase_data.get("date")
+    if val and len(val) >= 10 and val[4] == "-" and val[7] == "-":
+        return val[:10]
+    return None
+
+
+def calculate_days_remaining(end_date_str):
+    """Calculates days remaining from today until the end date."""
+    if not end_date_str:
+        return None
+    try:
+        end_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
+        now = datetime.now()
+        delta = (end_dt - now).days
+        return delta
+    except ValueError:
+        return None
 
 
 def format_phase_date(phase_data):
@@ -153,6 +177,11 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                 elif "end of life" in p_name or "eol" in p_name:
                     phases_map["eol"] = phase
 
+            # Pick primary phase end date to evaluate urgency
+            target_phase = phases_map["maint"] or phases_map["full"] or phases_map["eus1"] or phases_map["eol"]
+            raw_end = extract_end_date(target_phase)
+            days_remaining = calculate_days_remaining(raw_end)
+
             parsed_versions.append(
                 {
                     "name": ver_name,
@@ -160,6 +189,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     "tier": tier,
                     "ocp_compat": ocp_compat,
                     "ocp_aligned": ocp_aligned,
+                    "days_remaining": days_remaining,
                     "ga": format_phase_date(phases_map["ga"]),
                     "full": format_phase_date(phases_map["full"]),
                     "maint": format_phase_date(phases_map["maint"]),
