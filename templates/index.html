@@ -18,6 +18,7 @@
             font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         }
         .badge-eol { background-color: #dc3545; color: white; }
+        .badge-eom { background-color: #ffc107; color: #000; }
         .badge-active { background-color: #198754; color: white; }
         .badge-maint { background-color: #ffc107; color: #000; }
         .badge-eus { background-color: #0dcaf0; color: #000; }
@@ -61,6 +62,10 @@
             font-size: 0.75rem;
             color: #adb5bd;
             background-color: #16191d;
+        }
+        .table-custom td {
+            white-space: pre-line;
+            max-width: 250px;
         }
     </style>
 </head>
@@ -129,6 +134,13 @@
             const todayStr = new Date().toISOString().slice(0, 10);
             const pr = v.phase_ranges || {};
 
+            // 1. Check direct type strings from Red Hat API
+            if (v.type) {
+                const typeLower = v.type.toLowerCase();
+                if (typeLower.includes("end of life")) return "End of Life";
+                if (typeLower.includes("end of maintenance")) return "End of Maintenance";
+            }
+
             function isCurrent(phaseKey) {
                 if (!pr[phaseKey]) return false;
                 const s = pr[phaseKey].start;
@@ -139,6 +151,7 @@
                 return false;
             }
 
+            // 2. Strict phase window evaluation
             if (isCurrent('els') || isCurrent('els1') || isCurrent('els2') || isCurrent('els3') || isCurrent('elc')) {
                 return 'Extended Life Support';
             }
@@ -146,13 +159,26 @@
                 return 'Extended Update Support';
             }
             if (isCurrent('maint') || isCurrent('maint1') || isCurrent('maint2')) {
+                const maintPhase = pr.maint2 || pr.maint1 || pr.maint;
+                if (maintPhase && maintPhase.end && todayStr > maintPhase.end) {
+                    return 'End of Maintenance';
+                }
                 return 'Maintenance Support';
             }
             if (isCurrent('full')) {
                 return 'Full Support';
             }
 
-            return v.type;
+            // 3. Fallback check for expired phases
+            const allEndDates = Object.values(pr).map(p => p.end).filter(Boolean);
+            if (allEndDates.length > 0) {
+                const maxEnd = allEndDates.reduce((a, b) => (a > b ? a : b));
+                if (todayStr > maxEnd) {
+                    return 'End of Life';
+                }
+            }
+
+            return v.type || 'N/A';
         }
 
         function getUrgencyBadge(days) {
@@ -198,6 +224,7 @@
                         const statusLower = realStatus.toLowerCase();
 
                         if (statusLower.includes('end of life')) badgeClass = 'badge-eol';
+                        else if (statusLower.includes('end of maintenance')) badgeClass = 'badge-eom';
                         else if (statusLower.includes('maintenance')) badgeClass = 'badge-maint';
                         else if (statusLower.includes('extended')) badgeClass = 'badge-eus';
 

@@ -53,19 +53,29 @@ PRODUCTS_CONFIG = {
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 
 
+def clean_date_str(val):
+    """Sanitize date strings by stripping full ISO timestamps and 'N/A' artifacts."""
+    if not val or not isinstance(val, str):
+        return None
+    val = val.strip()
+    if val.upper() in ["N/A", "NONE", "NULL", ""]:
+        return None
+    # Preserve words like "Ongoing"
+    if val.lower() == "ongoing":
+        return "Ongoing"
+    # Strip full ISO timestamps down to YYYY-MM-DD
+    if len(val) >= 10 and val[4] == "-" and val[7] == "-":
+        return val[:10]
+    return val
+
 def extract_dates(phase_data):
-    """Extracts start and end date tuple string for comparison."""
+    """Extracts start and end date tuple string for status and days remaining calculations."""
     if not phase_data or isinstance(phase_data, str):
         return None, None
     s = phase_data.get("start_date")
     e = phase_data.get("end_date") or phase_data.get("date")
 
-    def clean(val):
-        if val and len(val) >= 10 and val[4] == "-" and val[7] == "-":
-            return val[:10]
-        return None
-
-    return clean(s), clean(e)
+    return clean_date_str(s), clean_date_str(e)
 
 
 def calculate_days_remaining(end_date_str):
@@ -81,18 +91,37 @@ def calculate_days_remaining(end_date_str):
 
 
 def format_phase_date(phase_data):
+    """Formats phase objects into clean strings while preserving text descriptions and removing N/A prefixes."""
     if not phase_data:
         return "N/A"
+    
     if isinstance(phase_data, str):
-        return phase_data
+        text = phase_data.replace("N/A to ", "").replace("N/A - ", "").strip()
+        cleaned = clean_date_str(text)
+        return cleaned if cleaned else ("N/A" if text.upper() == "N/A" else text)
 
-    start, end = extract_dates(phase_data)
-    if start and end and start != end:
-        return f"{start} to {end}"
-    elif end:
-        return end
-    elif start:
-        return start
+    if isinstance(phase_data, dict):
+        # 1. Preserve explicit text descriptions if provided by the Red Hat API
+        raw_text = phase_data.get("date_description") or phase_data.get("description") or phase_data.get("text")
+        if raw_text and isinstance(raw_text, str):
+            cleaned_raw = raw_text.replace("N/A to ", "").replace("N/A - ", "").strip()
+            if cleaned_raw and cleaned_raw.upper() != "N/A":
+                if len(cleaned_raw) >= 10 and cleaned_raw[4] == "-" and cleaned_raw[7] == "-":
+                    return clean_date_str(cleaned_raw)
+                return cleaned_raw
+
+        # 2. Extract and sanitize start and end values
+        start_val = clean_date_str(phase_data.get("start_date_description") or phase_data.get("start_date"))
+        end_val = clean_date_str(phase_data.get("end_date_description") or phase_data.get("end_date") or phase_data.get("date"))
+
+        # Only display range if BOTH valid start and end dates exist and differ
+        if start_val and end_val and start_val != end_val:
+            return f"{start_val} to {end_val}"
+        elif end_val:
+            return str(end_val)
+        elif start_val:
+            return str(start_val)
+
     return "N/A"
 
 
@@ -152,32 +181,34 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     phases_map["maint2"] = phase
                 elif "maintenance" in p_name:
                     phases_map["maint"] = phase
-                elif "term 3" in p_name and ("extended update" in p_name or "els" in p_name):
-                    phases_map["eus3"] = phase
+                # --- Specific RHEL Phase Matches ---
+                elif "extended life cycle support" in p_name or "els) add-on" in p_name:
+                    phases_map["elc"] = phase
+                    phases_map["els1"] = phase
+                    phases_map["els"] = phase
+                elif "extended life phase" in p_name:
+                    phases_map["long_life"] = phase
+                # --- EUS & Other ELS Term Matches ---
+                elif "els term 3" in p_name or "els 3" in p_name or "els (3)" in p_name:
                     phases_map["els3"] = phase
-                elif "term 2" in p_name and ("extended update" in p_name or "els" in p_name):
-                    phases_map["eus2"] = phase
+                elif "extended update support term 3" in p_name or "eus term 3" in p_name:
+                    phases_map["eus3"] = phase
+                elif "els term 2" in p_name or "els 2" in p_name or "els (2)" in p_name or "els phase 2" in p_name:
                     phases_map["els2"] = phase
-                elif "term 1" in p_name and "extended update" in p_name:
-                    phases_map["eus1"] = phase
-                elif "extended update support" in p_name and not phases_map["eus1"]:
-                    phases_map["eus1"] = phase
-                elif "els 1" in p_name or "els (1)" in p_name or "els phase 1" in p_name or ("els" in p_name and "add-on" in p_name):
+                elif "extended update support term 2" in p_name or "eus term 2" in p_name:
+                    phases_map["eus2"] = phase
+                elif "extended update support" in p_name or "eus term 1" in p_name or "eus" in p_name:
+                    if not phases_map["eus1"]:
+                        phases_map["eus1"] = phase
+                elif "els 1" in p_name or "els (1)" in p_name or "els phase 1" in p_name:
                     phases_map["els1"] = phase
                     if not phases_map["els"]:
                         phases_map["els"] = phase
-                elif "els 2" in p_name or "els (2)" in p_name or "els phase 2" in p_name:
-                    phases_map["els2"] = phase
-                elif "extended life cycle" in p_name or "elc" in p_name or "els" in p_name:
-                    phases_map["elc"] = phase
-                    if not phases_map["els"]:
-                        phases_map["els"] = phase
-                    if not phases_map["els1"]:
-                        phases_map["els1"] = phase
                 elif "long-life" in p_name or "long life" in p_name:
                     phases_map["long_life"] = phase
                 elif "end of life" in p_name or "eol" in p_name:
                     phases_map["eol"] = phase
+
 
             # Target active end date for urgency calculation
             target_phase = phases_map["maint2"] or phases_map["maint1"] or phases_map["maint"] or phases_map["full"] or phases_map["eus1"] or phases_map["eol"]
