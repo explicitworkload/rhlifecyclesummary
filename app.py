@@ -283,6 +283,7 @@ async def get_lifecycle_data():
     valid_results = [r for r in results if r is not None]
     payload = {"products": valid_results}
     
+    # Tell CDN and browsers to cache locally for 3600s and CDN for 12hours.
     return JSONResponse(
         content=payload,
         headers={"Cache-Control": "public, max-age=3600, s-maxage=43200"}
@@ -290,4 +291,7 @@ async def get_lifecycle_data():
 
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html")
+    response = templates.TemplateResponse(request=request, name="index.html")
+    # Tell CDN and browsers to revalidate index.html so UI updates load instantly
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
