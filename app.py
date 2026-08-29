@@ -12,8 +12,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # 1. Initialize App & Logger
 app = FastAPI(title="Red Hat Product Life Cycle Dashboard")
 templates = Jinja2Templates(directory="templates")
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("uvicorn.access")
+
+# Custom application logger
+logger = logging.getLogger("custom_access")
+logger.setLevel(logging.INFO)
+
+# Outputs to stdout if no handlers exist
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    logger.addHandler(handler)
+    
 
 PRODUCTS_CONFIG = {
     "Red Hat Enterprise Linux": {
@@ -59,10 +68,8 @@ PRODUCTS_CONFIG = {
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 
-# 2. Add Real IP Middleware
 class RealIPLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Extract Cloudflare IP, fallback to X-Forwarded-For, then direct socket IP
         real_ip = (
             request.headers.get("CF-Connecting-IP")
             or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
@@ -71,13 +78,14 @@ class RealIPLoggingMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # Log clean line with real visitor IP
+        # Standard log string output
         logger.info(
-            f'{real_ip} - "{request.method} {request.url.path} HTTP/1.1" {response.status_code}'
+            f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
         )
         return response
 
 app.add_middleware(RealIPLoggingMiddleware)
+
 
 def clean_date_str(val):
     """Sanitize date strings by stripping full ISO timestamps and 'N/A' artifacts."""
