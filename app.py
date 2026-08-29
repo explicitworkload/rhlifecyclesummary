@@ -272,6 +272,9 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
 
 @app.get("/api/data")
 async def get_lifecycle_data():
+    # Tell Cloudflare Edge to cache this API response for 12 hours (43200 seconds)
+    response.headers["Cache-Control"] = "public, max-age=3600, s-maxage=43200"
+    
     async with httpx.AsyncClient(timeout=10.0) as client:
         tasks = [
             fetch_product_data(client, prod_name, config)
