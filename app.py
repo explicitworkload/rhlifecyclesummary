@@ -1,13 +1,19 @@
 import asyncio
 from datetime import datetime
+import logging
 import re
+
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import httpx
+from starlette.middleware.base import BaseHTTPMiddleware
 
+# 1. Initialize App & Logger
 app = FastAPI(title="Red Hat Product Life Cycle Dashboard")
 templates = Jinja2Templates(directory="templates")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("uvicorn.access")
 
 PRODUCTS_CONFIG = {
     "Red Hat Enterprise Linux": {
@@ -53,6 +59,25 @@ PRODUCTS_CONFIG = {
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 
+# 2. Add Real IP Middleware
+class RealIPLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Extract Cloudflare IP, fallback to X-Forwarded-For, then direct socket IP
+        real_ip = (
+            request.headers.get("CF-Connecting-IP")
+            or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or (request.client.host if request.client else "127.0.0.1")
+        )
+
+        response = await call_next(request)
+
+        # Log clean line with real visitor IP
+        logger.info(
+            f'{real_ip} - "{request.method} {request.url.path} HTTP/1.1" {response.status_code}'
+        )
+        return response
+
+app.add_middleware(RealIPLoggingMiddleware)
 
 def clean_date_str(val):
     """Sanitize date strings by stripping full ISO timestamps and 'N/A' artifacts."""
