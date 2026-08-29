@@ -1,7 +1,8 @@
 import asyncio
 from datetime import datetime
+import re
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import httpx
 
@@ -272,9 +273,6 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
 
 @app.get("/api/data")
 async def get_lifecycle_data():
-    # Tell Cloudflare Edge to cache this API response for 12 hours (43200 seconds)
-    response.headers["Cache-Control"] = "public, max-age=3600, s-maxage=43200"
-    
     async with httpx.AsyncClient(timeout=10.0) as client:
         tasks = [
             fetch_product_data(client, prod_name, config)
@@ -283,8 +281,12 @@ async def get_lifecycle_data():
         results = await asyncio.gather(*tasks)
 
     valid_results = [r for r in results if r is not None]
-    return {"products": valid_results}
-
+    payload = {"products": valid_results}
+    
+    return JSONResponse(
+        content=payload,
+        headers={"Cache-Control": "public, max-age=3600, s-maxage=43200"}
+    )
 
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
