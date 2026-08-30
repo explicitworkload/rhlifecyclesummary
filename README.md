@@ -52,22 +52,24 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 
 *Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
 
----
+
 
 ## 🛠️ Tech Stack
 
 - **Backend:** Python 3.12+, FastAPI, `httpx` (Asynchronous API client), Jinja2
 - **Frontend:** Vanilla JS (ES6+), Bootstrap 5, Bootstrap Icons
 - **Data Source:** [Red Hat Product Life Cycles API](https://access.redhat.com/product-life-cycles/api/v1/products)
-* **Hosting & PaaS:** [Render](https://render.com/) (Web Services)
-* **DNS & Security:** [Cloudflare](https://www.cloudflare.com/) (DNS Only / Proxied Mode with SSL/TLS Full Strict)
-* **Uptime Monitoring:** UptimeRobot / Cron-Job.org via `/health` endpoint
+- **Hosting & PaaS:** [Render](https://render.com/) (Static Pages & Web Services)
+- **DNS & Security:** [Cloudflare](https://www.cloudflare.com/) (DNS Proxied Mode with SSL/TLS Full Strict)
+- **Uptime Monitoring:** UptimeRobot / Cron-Job.org via `/health` endpoint
+
 
 ## 🐳 Quickstart
 
-This repository automatically builds and publishes container images to **Quay.io** whenever updates are pushed to GitHub.
+This repository automatically builds and publishes container images to **Quay.io & ghcr** whenever updates are pushed to GitHub.
 
-* **Container Image URL:** `quay.io/jgoh/rhlifecyclesummary:latest`
+* **Quay container image:** `quay.io/jgoh/rhlifecyclesummary:latest`
+* **GitHub container image:** `ghcr.io/explicitworkload/rhlifecyclesummary:latest`
 
 ### Running directly from Quay.io
 
@@ -86,13 +88,23 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 ## 📁 Repository Structure
 
 ```text
-.
-├── app.py                # FastAPI backend app & API mapping logic
-├── Dockerfile            # Multi-stage/rootless container specification
-├── podman-compose.yml    # Orchestration file for Podman/Docker Compose
+rh-lifecycle-summary/
+├── .github/
+│   └── workflows/
+│       ├── release-latest.yml       # Workflow for building and pushing :latest GHCR images
+│       └── release.yml              # Tagged release build workflow
+├── images/
+│   ├── gemini-svg.svg              # Dashboard assets
+│   └── rhlifecycle-dashboard.png   # README preview screenshot
 ├── templates/
-│   └── index.html        # Responsive frontend template with Bootstrap 5
-└── README.md             # Project documentation
+│   └── index.html                  # Jinja2 dashboard UI template
+├── .gitignore                      # Git ignore rules
+├── app.py                          # FastAPI backend & API parser logic
+├── Dockerfile                      # Container build definitions
+├── podman-compose.override.yaml    # Local Podman Compose development overrides
+├── podman-compose.yaml             # Podman Compose deployment configuration
+├── README.md                       # Project documentation
+└── Tiltfile                        # Tilt local development orchestration
 ```
 
 ---
