@@ -19,4 +19,4 @@ USER 1001
 
 EXPOSE 8881
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8881", "--no-access-log"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8881", "--no-access-log", "--reload"]
