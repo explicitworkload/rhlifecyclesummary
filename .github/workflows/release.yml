@@ -1,0 +1,49 @@
+---
+
+### Setting Up GitHub Actions for GHCR
+### This workflow automatically builds and pushes your container image to **GitHub Container Registry (GHCR)** whenever you publish a GitHub Release or tag starting with `v*`.
+
+name: Build and Push Container Image to GHCR
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Metadata (Tags & Labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
