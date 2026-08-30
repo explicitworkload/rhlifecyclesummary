@@ -66,7 +66,7 @@ PRODUCTS_CONFIG = {
         "link": "https://access.redhat.com/support/policy/updates/openstack/platform"
     },
     "Red Hat OpenStack Services on OpenShift": {
-        "link": "https://access.redhat.com/support/policy/updates/openstack/platform/dates"
+        "link": "https://access.redhat.com/support/policy/updates/openstack/platform"
     },
 }
 
@@ -174,17 +174,31 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
             return None
 
         product_info = data[0]
-        parsed_versions = []
         official_link = config.get("link") or product_info.get("link", "#")
+
+        # 1. Group version objects by unique version name
+        grouped_versions = {}
 
         for ver in product_info.get("versions", []):
             ver_name = ver.get("name", "N/A")
-            status_type = ver.get("type", "N/A")
-            tier = ver.get("tier") or "N/A"
-            ocp_compat = ver.get("openshift_compatibility") or "N/A"
-            ocp_aligned = ver.get("openshift_aligned_version") or ver.get("extra_header_value") or "N/A"
-            final_minor = ver.get("final_minor_release") or ver.get("last_minor_release") or "N/A"
+            if ver_name not in grouped_versions:
+                grouped_versions[ver_name] = {
+                    "name": ver_name,
+                    "type": ver.get("type", "N/A"),
+                    "tier": ver.get("tier") or "N/A",
+                    "ocp_compat": ver.get("openshift_compatibility") or "N/A",
+                    "ocp_aligned": ver.get("openshift_aligned_version") or ver.get("extra_header_value") or "N/A",
+                    "final_minor": ver.get("final_minor_release") or ver.get("last_minor_release") or "N/A",
+                    "raw_phases": []
+                }
+            
+            # Accumulate all phases for this version name
+            grouped_versions[ver_name]["raw_phases"].extend(ver.get("phases", []))
 
+        parsed_versions = []
+
+        # 2. Parse accumulated phases per version
+        for ver_name, ver in grouped_versions.items():
             phases_map = {
                 "ga": None,
                 "full": None,
@@ -204,9 +218,10 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                 "eol": None,
             }
 
-            for phase in ver.get("phases", []):
+            for phase in ver["raw_phases"]:
                 p_name = phase.get("name", "").lower()
 
+                # Base Support Phases
                 if "general availability" in p_name or p_name == "ga":
                     phases_map["ga"] = phase
                 elif "full support" in p_name:
@@ -219,30 +234,42 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     phases_map["maint2"] = phase
                 elif "maintenance" in p_name:
                     phases_map["maint"] = phase
-                # Specific RHEL Phase Matches
-                elif "extended life cycle support" in p_name or "els) add-on" in p_name:
-                    phases_map["elc"] = phase
-                    phases_map["els1"] = phase
-                    phases_map["els"] = phase
-                elif "extended life phase" in p_name:
-                    phases_map["long_life"] = phase
-                # EUS & ELS Term Matches
-                elif "els term 3" in p_name or "els 3" in p_name or "els (3)" in p_name:
-                    phases_map["els3"] = phase
-                elif "extended update support term 3" in p_name or "eus term 3" in p_name:
-                    phases_map["eus3"] = phase
-                elif "els term 2" in p_name or "els 2" in p_name or "els (2)" in p_name or "els phase 2" in p_name:
-                    phases_map["els2"] = phase
-                elif "extended update support term 2" in p_name or "eus term 2" in p_name:
-                    phases_map["eus2"] = phase
-                elif "extended update support" in p_name or "eus term 1" in p_name or "eus" in p_name:
+
+                # --- Strict Term 3 Matches (Evaluated BEFORE general checks) ---
+                elif "term 3" in p_name or "3" in p_name:
+                    if "els" in p_name or "extended life" in p_name:
+                        phases_map["els3"] = phase
+                    elif "eus" in p_name or "extended update" in p_name:
+                        phases_map["eus3"] = phase
+
+                # --- Strict Term 2 Matches (Evaluated BEFORE general checks) ---
+                elif "term 2" in p_name or "2" in p_name:
+                    if "els" in p_name or "extended life" in p_name:
+                        phases_map["els2"] = phase
+                    elif "eus" in p_name or "extended update" in p_name:
+                        phases_map["eus2"] = phase
+
+                # --- Term 1 / Generic EUS & ELS Matches ---
+                elif "term 1" in p_name or "1" in p_name:
+                    if "els" in p_name or "extended life" in p_name:
+                        phases_map["els1"] = phase
+                        if not phases_map["els"]:
+                            phases_map["els"] = phase
+                    elif "eus" in p_name or "extended update" in p_name:
+                        if not phases_map["eus1"]:
+                            phases_map["eus1"] = phase
+
+                # --- Fallbacks ---
+                elif "extended update support" in p_name or p_name == "eus":
                     if not phases_map["eus1"]:
                         phases_map["eus1"] = phase
-                elif "els 1" in p_name or "els (1)" in p_name or "els phase 1" in p_name:
-                    phases_map["els1"] = phase
+                elif "extended life cycle support" in p_name or "extended life support" in p_name or "els" in p_name:
+                    phases_map["elc"] = phase
                     if not phases_map["els"]:
                         phases_map["els"] = phase
-                elif "long-life" in p_name or "long life" in p_name:
+                    if not phases_map["els1"]:
+                        phases_map["els1"] = phase
+                elif "extended life phase" in p_name or "long-life" in p_name or "long life" in p_name:
                     phases_map["long_life"] = phase
                 elif "end of life" in p_name or "eol" in p_name:
                     phases_map["eol"] = phase
@@ -261,11 +288,11 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
 
             parsed_versions.append(
                 {
-                    "name": ver_name,
-                    "type": status_type,
-                    "tier": tier,
-                    "ocp_compat": ocp_compat,
-                    "ocp_aligned": ocp_aligned,
+                    "name": ver["name"],
+                    "type": ver["type"],
+                    "tier": ver["tier"],
+                    "ocp_compat": ver["ocp_compat"],
+                    "ocp_aligned": ver["ocp_aligned"],
                     "days_remaining": days_remaining,
                     "phase_ranges": phase_ranges,
                     "ga": format_phase_date(phases_map["ga"]),
@@ -284,7 +311,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
                     "els2": format_phase_date(phases_map["els2"]),
                     "els3": format_phase_date(phases_map["els3"]),
                     "eol": format_phase_date(phases_map["eol"]),
-                    "final_minor": final_minor,
+                    "final_minor": ver["final_minor"],
                 }
             )
 
@@ -306,7 +333,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
     except Exception as e:
         print(f"Error fetching {product_name}: {e}")
         return None
-
+    
 
 @app.get("/api/data")
 async def get_lifecycle_data(t: Optional[str] = None):
@@ -325,7 +352,6 @@ async def get_lifecycle_data(t: Optional[str] = None):
         "Cache-Control": "public, max-age=3600, s-maxage=43200"
     }
 
-    # If t parameter exists (e.g., /api/data?t=1725032400), tell edge not to cache
     if t is not None:
         response_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
 
@@ -342,6 +368,5 @@ async def health_check():
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
     response = templates.TemplateResponse(request=request, name="index.html")
-    # Tell CDN and browsers to revalidate index.html so UI updates load instantly
     response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response

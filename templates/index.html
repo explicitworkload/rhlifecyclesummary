@@ -106,7 +106,6 @@
                 <button id="toggleAccordionsBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions()">
                     <i class="bi bi-arrows-collapse me-1"></i>Collapse All
                 </button>
-                <!-- Triggers forceRefresh = true on click -->
                 <button class="btn btn-danger btn-sm" onclick="loadData(true)"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Data</button>
             </div>
         </header>
@@ -137,7 +136,7 @@
             <p class="mt-2 text-secondary small">Fetching live feeds from Red Hat Product Life Cycles API...</p>
         </div>
 
-        <!-- Accordion Container (Reserved height eliminates CLS) -->
+        <!-- Accordion Container -->
         <div id="accordionContainer" class="accordion d-none" style="min-height: 80vh;"></div>
     </div>
 
@@ -155,7 +154,6 @@
             const todayStr = new Date().toISOString().slice(0, 10);
             const pr = v.phase_ranges || {};
 
-            // 1. Check direct type strings from Red Hat API
             if (v.type) {
                 const typeLower = v.type.toLowerCase();
                 if (typeLower.includes("end of life")) return "End of Life";
@@ -172,7 +170,6 @@
                 return false;
             }
 
-            // 2. Strict phase window evaluation
             if (isCurrent('els') || isCurrent('els1') || isCurrent('els2') || isCurrent('els3') || isCurrent('elc')) {
                 return 'Extended Life Support';
             }
@@ -190,7 +187,6 @@
                 return 'Full Support';
             }
 
-            // 3. Fallback check for expired phases
             const allEndDates = Object.values(pr).map(p => p.end).filter(Boolean);
             if (allEndDates.length > 0) {
                 const maxEnd = allEndDates.reduce((a, b) => (a > b ? a : b));
@@ -216,13 +212,11 @@
             const container = document.getElementById('accordionContainer');
             container.classList.add('d-none');
 
-            // Append timestamp parameter when forceRefresh is true
             const cacheBuster = forceRefresh ? `?t=${Date.now()}` : '';
             const apiUrl = `/api/data${cacheBuster}`;
 
             try {
                 const response = await fetch(apiUrl, {
-                    // Force browser cache bypass on explicit user refresh
                     cache: forceRefresh ? 'reload' : 'default'
                 });
                 const data = await response.json();
@@ -232,7 +226,8 @@
                 data.products.forEach((prod, index) => {
                     let tableRows = '';
                     const nameLower = prod.product_name.toLowerCase();
-                    const isOpenstack = nameLower.includes("openstack");
+                    const isRhoso = nameLower.includes("openstack services on openshift");
+                    const isOpenstack = nameLower.includes("openstack platform") || (nameLower.includes("openstack") && !isRhoso);
                     const isRhelAi = nameLower === "red hat enterprise linux ai";
                     const isRhel = nameLower === "red hat enterprise linux";
                     const isAap = nameLower.includes("ansible automation platform");
@@ -243,7 +238,7 @@
                     const isDataGrid = nameLower.includes("data grid");
                     const isEdgeMgr = nameLower.includes("edge manager");
                     const isMicroshift = nameLower.includes("microshift");
-                    const isRhoso = nameLower.includes("openstack services on openshift");
+                    const isSso = nameLower.includes("single sign-on") || nameLower.includes("single sign on");
 
                     let hasExpiringVersions = false;
 
@@ -263,7 +258,6 @@
 
                         const rowClass = isExpiringSoon ? 'expiring-row' : '';
 
-                        // Exclude Calendar Feature for "End of Life" and "End of Maintenance"
                         const isExcludedFromCalendar = statusLower.includes('end of life') || statusLower.includes('end of maintenance');
 
                         const activeTargetDate = v.phase_ranges?.maint2?.end || v.phase_ranges?.maint1?.end || v.phase_ranges?.maint?.end || v.phase_ranges?.full?.end || v.phase_ranges?.eus1?.end || '';
@@ -290,7 +284,10 @@
                         const statusCell = `<td class="status-col"><div class="d-inline-flex align-items-center gap-1"><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}${calendarBtnHtml}</div></td>`;
 
                         if (isOpenstack) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td><td>${v.els3}</td></tr>`;
+                            const els1Val = (v.els1 && v.els1 !== 'N/A') ? v.els1 : v.els;
+                            const els2Val = (v.els2 && v.els2 !== 'N/A') ? v.els2 : 'N/A';
+                            const els3Val = (v.els3 && v.els3 !== 'N/A') ? v.els3 : 'N/A';
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${els1Val}</td><td>${els2Val}</td><td>${els3Val}</td></tr>`;
                         } else if (isRhoso) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els}</td></tr>`;
                         } else if (isRhelAi) {
@@ -298,7 +295,8 @@
                         } else if (isRhel) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
                         } else if (isAap) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.els}</td></tr>`;
+                            const elsVal = (v.els1 && v.els1 !== 'N/A') ? v.els1 : v.els;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${elsVal}</td></tr>`;
                         } else if (isQuay) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
                         } else if (isEdgeMgr) {
@@ -313,6 +311,8 @@
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
                         } else if (isDataGrid) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                        } else if (isSso) {
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td></tr>`;
                         } else {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
                         }
@@ -326,6 +326,8 @@
                     let tableHeaders = '';
                     if (isOpenstack) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Third-Party Certification</th><th>Maintenance Support</th><th>ELS Add-On</th><th>ELS Term 2 Add-On</th><th>ELS Term 3 Add-On</th>`;
+                    } else if (isRhoso) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>OCP Control Plane</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>ELS Add-On</th>`;
                     } else if (isRhelAi) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>End of Life</th>`;
                     } else if (isRhel) {
@@ -346,6 +348,8 @@
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th><th>Extended Life Support (ELS) 2</th>`;
                     } else if (isDataGrid) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th><th>Extended Life Support (ELS) 2</th>`;
+                    } else if (isSso) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th>`;
                     } else {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>EUS Term 1</th><th>EUS Term 2</th><th>EUS Term 3</th><th>Extended Life Phase</th>`;
                     }
@@ -488,25 +492,21 @@
                 `SUMMARY:EOL Warning: ${productName} ${version}`,
                 `DESCRIPTION:${descriptionText}`,
                 `URL:${siteUrl}`,
-                // 120 Days Before
                 'BEGIN:VALARM',
                 'TRIGGER:-P120D',
                 'ACTION:DISPLAY',
                 `DESCRIPTION:Reminder: ${productName} ${version} expires in 120 days (${endDateStr})`,
                 'END:VALARM',
-                // 90 Days Before
                 'BEGIN:VALARM',
                 'TRIGGER:-P90D',
                 'ACTION:DISPLAY',
                 `DESCRIPTION:Reminder: ${productName} ${version} expires in 90 days (${endDateStr})`,
                 'END:VALARM',
-                // 60 Days Before
                 'BEGIN:VALARM',
                 'TRIGGER:-P60D',
                 'ACTION:DISPLAY',
                 `DESCRIPTION:Reminder: ${productName} ${version} expires in 60 days (${endDateStr})`,
                 'END:VALARM',
-                // 30 Days Before
                 'BEGIN:VALARM',
                 'TRIGGER:-P30D',
                 'ACTION:DISPLAY',

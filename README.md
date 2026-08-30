@@ -48,6 +48,8 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 - **Red Hat Edge Manager**
 - **Red Hat build of MicroShift**
 - **Red Hat OpenStack Platform**
+- **Red Hat OpenStack on OpenShift**
+
 *Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
 
 ---
