@@ -5,7 +5,7 @@ import re
 
 from typing import Optional
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -327,6 +327,10 @@ async def get_lifecycle_data(t: Optional[str] = None):
         response_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
 
     return JSONResponse(content=payload, headers=response_headers)
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def get_robots():
+    return "User-agent: *\nAllow: /"
 
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
