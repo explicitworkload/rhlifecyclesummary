@@ -2,6 +2,8 @@
 
 An interactive, live dashboard that aggregates and tracks end-of-life (EOL), support phase transitions, and active update windows across Red Hat products. Built with FastAPI and vanilla JavaScript, it consumes the official Red Hat Product Life Cycles API to give system administrators, platform engineers, and enterprise architects a unified view of their infrastructure's support status.
 
+🌐 **Live Demo:** [https://rhlifecycle.kubernetes.day](https://rhlifecycle.kubernetes.day)
+
 ![lifecycle-dashboard](images/rhlifecycle-dashboard.png)
 
 
@@ -47,6 +49,9 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 - **Backend:** Python 3.12+, FastAPI, `httpx` (Asynchronous API client), Jinja2
 - **Frontend:** Vanilla JS (ES6+), Bootstrap 5, Bootstrap Icons
 - **Data Source:** [Red Hat Product Life Cycles API](https://access.redhat.com/product-life-cycles/api/v1/products)
+* **Hosting & PaaS:** [Render](https://render.com/) (Web Services)
+* **DNS & Security:** [Cloudflare](https://www.cloudflare.com/) (DNS Only / Proxied Mode with SSL/TLS Full Strict)
+* **Uptime Monitoring:** UptimeRobot / Cron-Job.org via `/health` endpoint
 
 ## 🐳 Quickstart
 
@@ -112,12 +117,14 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 ---
 
-## 📊 Endpoints
+## API & Health Endpoints
 
-| Endpoint | Method | Description |
+| Endpoint | Methods | Description |
 | :--- | :--- | :--- |
-| `/` | `GET` | Serves the web dashboard UI |
-| `/api/data` | `GET` | Returns aggregated JSON lifecycle payload directly from Red Hat feeds |
+| `/` | `GET`, `HEAD` | Main Lifecycle Dashboard UI |
+| `/api/data` | `GET` | Aggregated JSON feed from Red Hat API sources |
+| `/health` | `GET`, `HEAD` | Lightweight service ping endpoint returning `{"status": "ok"}` |
+| `/robots.txt` | `GET` | Web crawler routing rules |
 
 ---
 
@@ -130,5 +137,6 @@ Disclaimer: Dates displayed on this dashboard are dynamically fetched for summar
 ## 👨‍💻 Maintainer
 
 Maintained with by **John**  
-📧 **Email:** [me@kubernetes.day](mailto:me@kubernetes.day)  
+📧 **Email:** [me@kubernetes.day](mailto:me@kubernetes.day). Distributed under the MIT License.
 
+Contributions, bug reports, and feature requests are welcome! Feel free to check the issues page or submit a pull request.
