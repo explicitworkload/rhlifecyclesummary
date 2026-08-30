@@ -243,6 +243,7 @@
                     const isDataGrid = nameLower.includes("data grid");
                     const isEdgeMgr = nameLower.includes("edge manager");
                     const isMicroshift = nameLower.includes("microshift");
+                    const isRhoso = nameLower.includes("openstack services on openshift");
 
                     let hasExpiringVersions = false;
 
@@ -290,6 +291,8 @@
 
                         if (isOpenstack) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td><td>${v.els3}</td></tr>`;
+                        } else if (isRhoso) {
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els}</td></tr>`;
                         } else if (isRhelAi) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
                         } else if (isRhel) {

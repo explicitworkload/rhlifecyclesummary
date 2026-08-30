@@ -65,6 +65,9 @@ PRODUCTS_CONFIG = {
     "Red Hat OpenStack Platform": {
         "link": "https://access.redhat.com/support/policy/updates/openstack/platform"
     },
+    "Red Hat OpenStack Services on OpenShift": {
+        "link": "https://access.redhat.com/support/policy/updates/openstack/platform/dates"
+    },
 }
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
