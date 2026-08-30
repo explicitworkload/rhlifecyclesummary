@@ -332,6 +332,10 @@ async def get_lifecycle_data(t: Optional[str] = None):
 def get_robots():
     return "User-agent: *\nAllow: /"
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
     response = templates.TemplateResponse(request=request, name="index.html")
