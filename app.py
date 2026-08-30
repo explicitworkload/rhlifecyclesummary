@@ -33,7 +33,7 @@ PRODUCTS_CONFIG = {
         "link": "https://access.redhat.com/support/policy/updates/rhelai"
     },
     "Red Hat OpenShift Container Platform": {
-        "link": "https://access.redhat.com/support/policy/updates/openshift#fullsupport"
+        "link": "https://access.redhat.com/support/policy/updates/openshift"
     },
     "Red Hat OpenShift AI Self-Managed": {
         "link": "https://access.redhat.com/support/policy/updates/rhoai-sm/lifecycle"
@@ -75,20 +75,21 @@ API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 class RealIPLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         real_ip = (
-            request.headers.get("CF-Connecting-IP")
+            request.headers.get("X-Visitor-IP")
+            or request.headers.get("X-Real-IP")
+            or request.headers.get("CF-Connecting-IP")
             or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
             or (request.client.host if request.client else "127.0.0.1")
         )
 
         response = await call_next(request)
 
-        # Standard log string output
-        logger.info(
-            f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
-        )
-        return response
+        if request.url.path not in ["/health", "/robots.txt"]:
+            logger.info(
+                f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
+            )
 
-app.add_middleware(RealIPLoggingMiddleware)
+        return response
 
 
 def clean_date_str(val):
