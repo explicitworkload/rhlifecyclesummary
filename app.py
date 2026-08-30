@@ -74,22 +74,27 @@ API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
 
 class RealIPLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Safely parse X-Forwarded-For only if it exists
+        xff = request.headers.get("X-Forwarded-For")
+        first_xff = xff.split(",")[0].strip() if xff else None
+
         real_ip = (
             request.headers.get("X-Visitor-IP")
             or request.headers.get("X-Real-IP")
             or request.headers.get("CF-Connecting-IP")
-            or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+            or first_xff
             or (request.client.host if request.client else "127.0.0.1")
         )
 
         response = await call_next(request)
 
-        if request.url.path not in ["/health", "/robots.txt"]:
-            logger.info(
-                f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
-            )
-
+        # Standard log string output
+        logger.info(
+            f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
+        )
         return response
+
+app.add_middleware(RealIPLoggingMiddleware)
 
 
 def clean_date_str(val):
