@@ -104,7 +104,8 @@
                 <button id="toggleAccordionsBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions()">
                     <i class="bi bi-arrows-collapse me-1"></i>Collapse All
                 </button>
-                <button class="btn btn-danger btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Data</button>
+                <!-- Triggers forceRefresh = true on click -->
+                <button class="btn btn-danger btn-sm" onclick="loadData(true)"><i class="bi bi-arrow-clockwise me-1"></i>Refresh Data</button>
             </div>
         </header>
 
@@ -134,8 +135,8 @@
             <p class="mt-2 text-secondary small">Fetching live feeds from Red Hat Product Life Cycles API...</p>
         </div>
 
-        <!-- Accordion Container -->
-        <div id="accordionContainer" class="accordion d-none"></div>
+        <!-- Accordion Container (Reserved height eliminates CLS) -->
+        <div id="accordionContainer" class="accordion d-none" style="min-height: 80vh;"></div>
     </div>
 
     <!-- Author Footnote Credit -->
@@ -208,13 +209,20 @@
             return '';
         }
 
-        async function loadData() {
+        async function loadData(forceRefresh = false) {
             document.getElementById('loading').classList.remove('d-none');
             const container = document.getElementById('accordionContainer');
             container.classList.add('d-none');
 
+            // Append timestamp parameter when forceRefresh is true
+            const cacheBuster = forceRefresh ? `?t=${Date.now()}` : '';
+            const apiUrl = `/api/data${cacheBuster}`;
+
             try {
-                const response = await fetch('/api/data');
+                const response = await fetch(apiUrl, {
+                    // Force browser cache bypass on explicit user refresh
+                    cache: forceRefresh ? 'reload' : 'default'
+                });
                 const data = await response.json();
                 
                 container.innerHTML = '';
@@ -511,7 +519,7 @@
             document.body.removeChild(link);
         }
 
-        document.addEventListener("DOMContentLoaded", loadData);
+        document.addEventListener("DOMContentLoaded", () => loadData(false));
     </script>
 </body>
 </html>

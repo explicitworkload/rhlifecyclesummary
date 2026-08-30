@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 import re
 
+from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -305,7 +306,7 @@ async def fetch_product_data(client: httpx.AsyncClient, product_name: str, confi
 
 
 @app.get("/api/data")
-async def get_lifecycle_data():
+async def get_lifecycle_data(t: Optional[str] = None):
     async with httpx.AsyncClient(timeout=10.0) as client:
         tasks = [
             fetch_product_data(client, prod_name, config)
@@ -316,11 +317,16 @@ async def get_lifecycle_data():
     valid_results = [r for r in results if r is not None]
     payload = {"products": valid_results}
     
-    # Tell CDN and browsers to cache locally for 3600s and CDN for 12hours.
-    return JSONResponse(
-        content=payload,
-        headers={"Cache-Control": "public, max-age=3600, s-maxage=43200"}
-    )
+    # Set default cache headers
+    response_headers = {
+        "Cache-Control": "public, max-age=3600, s-maxage=43200"
+    }
+
+    # If t parameter exists (e.g., /api/data?t=1725032400), tell edge not to cache
+    if t is not None:
+        response_headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+
+    return JSONResponse(content=payload, headers=response_headers)
 
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request):
