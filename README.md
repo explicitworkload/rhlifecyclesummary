@@ -7,10 +7,18 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 ![lifecycle-dashboard](images/rhlifecycle-dashboard.png)
 
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Podman](https://img.shields.io/badge/Podman-Compatible-purple.svg)
-![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green.svg)
+<!-- Core Stack -->
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi&logoColor=white)
+![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
+![Render](https://img.shields.io/badge/Render-Hosted-46E3B7?logo=render&logoColor=white)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-DNS%20%26%20SSL-F38020?logo=cloudflare&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
+![Podman](https://img.shields.io/badge/Podman-Compatible-892CA0?logo=podman&logoColor=white)
+![UptimeRobot](https://img.shields.io/badge/UptimeRobot-Monitored-3BD4AE?logo=uptimerobot&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ---
 
