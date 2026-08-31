@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 import httpx
 from pydantic import BaseModel
+import traceback
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from azure_token_refresh import AZURE_CONFIGURED, get_token as azure_get_token, get_chat_url as azure_get_chat_url, start_background_refresh as azure_start_refresh
 
@@ -29,6 +31,11 @@ if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s: %(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(status_code=500, content={"error": f"{type(exc).__name__}: {str(exc)}"})
     
 
 PRODUCTS_CONFIG = {
