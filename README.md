@@ -1,6 +1,6 @@
 # 🚀 Red Hat Product Lifecycle Dashboard
 
-An interactive, live dashboard that aggregates and tracks end-of-life (EOL), support phase transitions, and active update windows across Red Hat products. Built with FastAPI and vanilla JavaScript, it consumes the official Red Hat Product Life Cycles API to give system administrators, platform engineers, and enterprise architects a unified view of their infrastructure's support status.
+An interactive, live dashboard that aggregates and tracks end-of-life (EOL), support phase transitions, and active update windows across Red Hat products. Built with FastAPI and vanilla JavaScript, it consumes the official Red Hat Product Life Cycles API to give system administrators, platform engineers, and enterprise architects a unified view of their infrastructure's support status. Powered with AI-powered Lifecycle Advisor to answer any questions you have about lifecycle.
 
 🌐 **Live Demo:** [https://rhlifecycle.kubernetes.day](https://rhlifecycle.kubernetes.day)
 
@@ -25,7 +25,7 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 
 - ⚡ **Real-Time API Data** — Pulls support lifecycle phases directly from Red Hat's public API endpoints.
 - 🏷️ **Dynamic Status Resolution** — Evaluates live phase windows (Full Support, EUS, Maintenance, EOM, EOL) against today's date to compute accurate status badges.
-- 🤖 **AI-Powered Lifecycle Advisor** — An integrated chatbot that answers product lifecycle questions, powered by Azure OpenAI with Groq fallback. Supports tool-calling to look up live data from the Red Hat API.
+- 🤖 **AI-Powered Lifecycle Advisor** — An integrated chatbot that answers product lifecycle questions, powered by Azure OpenAI & Groq. Supports tool-calling to look up live data from the Red Hat API.
 - 📅 **.ics Calendar Export** — Download calendar events for active product versions with built-in alert triggers at **120, 90, 60, and 30 days** before expiry. Compatible with Outlook, Google Calendar, and Apple Calendar.
 - ⏳ **EOL Urgency Counters** — Visual badges flag versions nearing support expiration within 120 days.
 - 🔍 **Quick Filter & Search** — Search by product name, major/minor version, and filter out End of Life or End of Maintenance entries.
