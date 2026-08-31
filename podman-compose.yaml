@@ -12,7 +12,7 @@ services:
     - PYTHONUNBUFFERED=1
     - WATCHFILES_FORCE_POLLING=true
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8881/" ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8881/health')" ]
       interval: 30s
       timeout: 5s
       retries: 3
