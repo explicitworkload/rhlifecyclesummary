@@ -571,46 +571,52 @@ async def chat_endpoint(req: ChatRequest, request: Request):
         return resp
 
     max_iterations = 12
-    async with httpx.AsyncClient(timeout=90.0) as client:
-        for iteration in range(max_iterations):
-            payload = {
-                "model": GROQ_MODEL,
-                "messages": messages,
-                "temperature": 0.3,
-                "max_tokens": 1024
-            }
-            if iteration < max_iterations - 1:
-                payload["tools"] = LIFECYCLE_TOOLS
-            else:
-                logger.info(f"{log_prefix} final iteration — forcing answer without tools")
-            resp = await call_llm(client, payload, step_label=f"step {iteration+1}/{max_iterations}")
-            if resp.status_code != 200:
-                return JSONResponse(status_code=resp.status_code, content={"error": resp.text})
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            for iteration in range(max_iterations):
+                payload = {
+                    "model": GROQ_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 1024
+                }
+                if iteration < max_iterations - 1:
+                    payload["tools"] = LIFECYCLE_TOOLS
+                else:
+                    logger.info(f"{log_prefix} final iteration — forcing answer without tools")
+                resp = await call_llm(client, payload, step_label=f"step {iteration+1}/{max_iterations}")
+                if resp.status_code != 200:
+                    logger.error(f"{log_prefix} LLM returned {resp.status_code}: {resp.text[:300]}")
+                    return JSONResponse(status_code=resp.status_code, content={"error": resp.text})
 
-            result = resp.json()
-            choice = result.get("choices", [{}])[0]
-            msg = choice.get("message", {})
-            finish_reason = choice.get("finish_reason")
+                result = resp.json()
+                choice = result.get("choices", [{}])[0]
+                msg = choice.get("message", {})
+                finish_reason = choice.get("finish_reason")
 
-            if finish_reason == "tool_calls" or msg.get("tool_calls"):
-                messages.append(msg)
-                for tool_call in msg.get("tool_calls", []):
-                    fn = tool_call.get("function", {})
-                    tool_name = fn.get("name", "")
-                    try:
-                        arguments = json.loads(fn.get("arguments", "{}"))
-                    except json.JSONDecodeError:
-                        arguments = {}
-                    tool_result = await execute_tool(tool_name, arguments)
-                    if len(tool_result) > 2000:
-                        tool_result = tool_result[:2000] + '..."}'
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.get("id", ""),
-                        "content": tool_result
-                    })
-                continue
+                if finish_reason == "tool_calls" or msg.get("tool_calls"):
+                    messages.append(msg)
+                    for tool_call in msg.get("tool_calls", []):
+                        fn = tool_call.get("function", {})
+                        tool_name = fn.get("name", "")
+                        try:
+                            arguments = json.loads(fn.get("arguments", "{}"))
+                        except json.JSONDecodeError:
+                            arguments = {}
+                        logger.info(f"{log_prefix} step {iteration+1}/{max_iterations} tool={tool_name} args={arguments}")
+                        tool_result = await execute_tool(tool_name, arguments)
+                        if len(tool_result) > 2000:
+                            tool_result = tool_result[:2000] + '..."}'
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.get("id", ""),
+                            "content": tool_result
+                        })
+                    continue
 
-            return JSONResponse(content={"response": msg.get("content", "")})
+                return JSONResponse(content={"response": msg.get("content", "")})
 
-    return JSONResponse(content={"response": "I wasn't able to complete the lookup. Please try again."})
+        return JSONResponse(content={"response": "I wasn't able to complete the lookup. Please try again."})
+    except Exception as e:
+        logger.error(f"{log_prefix} chat error: {type(e).__name__}: {e}")
+        return JSONResponse(status_code=500, content={"error": f"Internal error: {type(e).__name__}: {str(e)}"})
