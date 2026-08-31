@@ -6,9 +6,8 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 
 ![lifecycle-dashboard](images/rhlifecycle-dashboard.png)
 
-
 <!-- Core Stack -->
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi&logoColor=white)
 ![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap&logoColor=white)
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
@@ -24,64 +23,111 @@ An interactive, live dashboard that aggregates and tracks end-of-life (EOL), sup
 
 ## 🌟 Features
 
-- **⚡ Real-Time API Data:** Automatically pulls support lifecycle phases directly from Red Hat's public API endpoints.
-- **🏷️ Dynamic Status Resolution:** Accurately evaluates live phase windows (Full Support, Extended Update Support, Maintenance Support, End of Maintenance, and End of Life) based on current dates.
-- **📅 .ics Calendar Export (With Alarms):** Download calendar events (`.ics`) for active product versions directly into Outlook, Google Calendar, or Apple Calendar. Includes built-in alert triggers for **120, 90, 60, and 30 days** prior to expiration.
-- **⏳ EOL Urgency Counters:** Visual badges automatically flag versions nearing support expiration within 120 days.
-- **🔍 Quick Filter & Search:** Easily search by product name, major version, or minor version numbers.
-- **📱 Responsive UI:** Built with Bootstrap 5 in a dark enterprise theme.
+- ⚡ **Real-Time API Data** — Pulls support lifecycle phases directly from Red Hat's public API endpoints.
+- 🏷️ **Dynamic Status Resolution** — Evaluates live phase windows (Full Support, EUS, Maintenance, EOM, EOL) against today's date to compute accurate status badges.
+- 🤖 **AI-Powered Lifecycle Advisor** — An integrated chatbot that answers product lifecycle questions, powered by Azure OpenAI with Groq fallback. Supports tool-calling to look up live data from the Red Hat API.
+- 📅 **.ics Calendar Export** — Download calendar events for active product versions with built-in alert triggers at **120, 90, 60, and 30 days** before expiry. Compatible with Outlook, Google Calendar, and Apple Calendar.
+- ⏳ **EOL Urgency Counters** — Visual badges flag versions nearing support expiration within 120 days.
+- 🔍 **Quick Filter & Search** — Search by product name, major/minor version, and filter out End of Life or End of Maintenance entries.
+- 📱 **Responsive UI** — Mobile-friendly card layout with sticky search bar, built on Bootstrap 5 in a dark enterprise theme.
 
 ---
 
-## 🛠️ Supported Products
+## 🏗️ Architecture
 
-- **Red Hat Enterprise Linux (RHEL)** *(Includes ELC, Long-Life Add-On, and Final Minor Release tracking)*
-- **Red Hat Enterprise Linux AI (RHEL AI)**
-- **Red Hat build of Keycloak** *(Includes dependency note support)*
-- **Red Hat Ansible Automation Platform (AAP)** *(Term 1 & Term 2 EUS resolution)*
-- **Red Hat OpenShift Container Platform (OCP)**
-- **Red Hat OpenShift AI Self-Managed**
-- **Red Hat Quay**
-- **Red Hat Single Sign-On**
-- **Red Hat JBoss Enterprise Application Platform**
-- **Red Hat Data Grid**
-- **Red Hat Edge Manager**
-- **Red Hat build of MicroShift**
-- **Red Hat OpenStack Platform**
-- **Red Hat OpenStack on OpenShift**
+```text
+Browser ──► GET / ──► FastAPI (Jinja2) ──► index.html
+         ──► GET /api/data ──► Fan-out async httpx ──► Red Hat Lifecycle API
+         ──► POST /api/chat ──► Azure OpenAI / Groq ──► Tool calls ──► Red Hat Lifecycle API
+```
 
-*Want to add more Red Hat products to this dashboard? Reach out via email or submit a Pull Request!*
+**Single-file backend** (`app.py`) — Product config, async API fetching, date parsing, chat endpoint with LLM tool-calling loop, and route handlers.
 
+**Single-file frontend** (`templates/index.html`) — Jinja2-served HTML with inline JS/CSS. No build step, no bundler.
 
+**AI Chat** — The Lifecycle Advisor uses Azure OpenAI gpt-4 as the primary backend with Groq gpt-oss-120b as fallback. It supports a 12-iteration tool-calling loop to look up live lifecycle data before generating responses. Rate limit retries are handled automatically.
+
+---
 
 ## 🛠️ Tech Stack
 
-- **Backend:** Python 3.12+, FastAPI, `httpx` (Asynchronous API client), Jinja2
-- **Frontend:** Vanilla JS (ES6+), Bootstrap 5, Bootstrap Icons
-- **Data Source:** [Red Hat Product Life Cycles API](https://access.redhat.com/product-life-cycles/api/v1/products)
-- **Hosting & PaaS:** [Render](https://render.com/) (Static Pages & Web Services)
-- **DNS & Security:** [Cloudflare](https://www.cloudflare.com/) (DNS Proxied Mode with SSL/TLS Full Strict)
-- **Uptime Monitoring:** UptimeRobot / Cron-Job.org via `/health` endpoint
+| Layer | Technology |
+| :--- | :--- |
+| Backend | Python 3.12+, FastAPI, httpx, Jinja2 |
+| Frontend | Vanilla JS (ES6+), Bootstrap 5, Bootstrap Icons |
+| AI / LLM | Azure OpenAI (primary), Groq (fallback) |
+| Data Source | [Red Hat Product Life Cycles API](https://access.redhat.com/product-life-cycles/api/v1/products) |
+| Hosting | [Render](https://render.com/) |
+| DNS & Security | [Cloudflare](https://www.cloudflare.com/) (Proxied DNS, SSL/TLS Full Strict, Workers for failover) |
+| Monitoring | UptimeRobot / Cron-Job.org via `/health` endpoint |
 
+---
 
 ## 🐳 Quickstart
 
-This repository automatically builds and publishes container images to **Quay.io & ghcr** whenever updates are pushed to GitHub.
+Pre-built container images are published automatically on every push to `main`:
 
-* **Quay container image:** `quay.io/jgoh/rhlifecyclesummary:latest`
-* **GitHub container image:** `ghcr.io/explicitworkload/rhlifecyclesummary:latest`
+- **Quay:** `quay.io/jgoh/rhlifecyclesummary:latest`
+- **GHCR:** `ghcr.io/explicitworkload/rhlifecyclesummary:latest`
 
-### Running directly from Quay.io
-
-You can pull and run the latest pre-built container image directly without building it locally:
+### 📦 Run from a pre-built image
 
 ```bash
-# Pull and run using Podman
-podman run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:latest
-
-# Or using Docker
-docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:latest
+podman run -d -p 8881:8881 --env-file .env --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:latest
 ```
+
+### 🐳 Run with Podman/Docker Compose
+
+```bash
+git clone https://github.com/explicitworkload/rhlifecyclesummary.git
+cd rhlifecyclesummary
+
+# Production
+podman-compose up -d
+
+# Development (mounts local files for hot-reload)
+podman-compose -f podman-compose.yaml -f podman-compose.override.yaml up -d
+```
+
+### ⚡ Run with Tilt
+
+```bash
+tilt up
+```
+
+### 💻 Run locally (no container)
+
+```bash
+pip install fastapi uvicorn jinja2 httpx requests
+uvicorn app:app --host 0.0.0.0 --port 8881 --reload
+```
+
+### 🔐 Environment Variables
+
+Copy `.env.sample` to `.env` and fill in the values. The dashboard works without AI credentials — the Lifecycle Advisor will simply be disabled.
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `GROQ_API_KEY` | No | Groq API key (fallback LLM) |
+| `GROQ_MODEL` | No | Model name for Groq endpoint |
+| `GROQ_API_URL` | No | Groq-compatible API URL |
+| `AZURE_TENANT_ID` | No | Azure AD tenant ID |
+| `AZURE_CLIENT_ID` | No | Azure AD app client ID |
+| `AZURE_CLIENT_SECRET` | No | Azure AD app client secret |
+| `AZURE_OPENAI_ENDPOINT` | No | Azure OpenAI endpoint URL |
+| `AZURE_OPENAI_DEPLOYMENT` | No | Azure OpenAI deployment name |
+
+---
+
+## 📡 API Endpoints
+
+| Endpoint | Methods | Description |
+| :--- | :--- | :--- |
+| `/` | `GET`, `HEAD` | Main dashboard UI |
+| `/api/data` | `GET` | Aggregated JSON feed from Red Hat API |
+| `/api/chat` | `POST` | Lifecycle Advisor chat endpoint |
+| `/health` | `GET`, `HEAD` | Health check — returns `{"status": "ok"}` |
+| `/robots.txt` | `GET` | Web crawler rules |
 
 ---
 
@@ -89,76 +135,31 @@ docker run -d -p 8881:8881 --name rh-dashboard quay.io/jgoh/rhlifecyclesummary:l
 
 ```text
 rh-lifecycle-summary/
-├── .github/
-│   └── workflows/
-│       ├── release-latest.yml       # Workflow for building and pushing :latest GHCR images
-│       └── release.yml              # Tagged release build workflow
-├── images/
-│   ├── gemini-svg.svg              # Dashboard assets
-│   └── rhlifecycle-dashboard.png   # README preview screenshot
+├── .github/workflows/
+│   ├── release-latest.yml          # Build & push :latest to GHCR on main
+│   └── release.yml                 # Tagged release build
 ├── templates/
-│   └── index.html                  # Jinja2 dashboard UI template
-├── .gitignore                      # Git ignore rules
-├── app.py                          # FastAPI backend & API parser logic
-├── Dockerfile                      # Container build definitions
-├── podman-compose.override.yaml    # Local Podman Compose development overrides
-├── podman-compose.yaml             # Podman Compose deployment configuration
-├── README.md                       # Project documentation
-└── Tiltfile                        # Tilt local development orchestration
+│   └── index.html                  # Jinja2 dashboard UI (inline JS/CSS)
+├── app.py                          # FastAPI backend & API logic
+├── azure_token_refresh.py          # Azure OAuth2 client credentials token manager
+├── Dockerfile                      # Container build
+├── podman-compose.yaml             # Production compose config
+├── podman-compose.override.yaml    # Dev overrides (volume mount, .env)
+├── Tiltfile                        # Tilt local dev orchestration
+├── .env.sample                     # Environment variable template
+└── README.md
 ```
-
----
-
-### Running with `podman-compose`
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/explicitworkload/rhlifecyclesummary.git
-   cd rhlifecyclesummary
-   ```
-
-2. **Start the service:**
-   ```
-   podman-compose up -d
-   ```
-
-3. **Stop the service:**
-    ```
-    podman-compose down
-    ```
-
-4. **Build the image (Optional):**
-    ```
-    podman build -t rh-lifecycle-dashboard .
-    ```
-
-5. **Quickstart**
-    ```
-    podman run -d -p 8881:8881 --name rh-dashboard rh-lifecycle-dashboard
-    ```
-
----
-
-## API & Health Endpoints
-
-| Endpoint | Methods | Description |
-| :--- | :--- | :--- |
-| `/` | `GET`, `HEAD` | Main Lifecycle Dashboard UI |
-| `/api/data` | `GET` | Aggregated JSON feed from Red Hat API sources |
-| `/health` | `GET`, `HEAD` | Lightweight service ping endpoint returning `{"status": "ok"}` |
-| `/robots.txt` | `GET` | Web crawler routing rules |
 
 ---
 
 ## ⚠️ Disclaimer
 
-Disclaimer: Dates displayed on this dashboard are dynamically fetched for summary tracking. Always reference official  [Red Hat Product Update Policies](https://access.redhat.com/product-life-cycles/update_policies) linked in each product card for definitive support terms.
+Dates displayed on this dashboard are dynamically fetched for summary tracking. The AI-powered Lifecycle Advisor may produce inaccurate responses. Always reference official [Red Hat lifecycle policy pages](https://access.redhat.com/product-life-cycles/update_policies) linked in each product card and contact [Red Hat Support](https://access.redhat.com/support) for critical decisions.
 
 ---
 
-## 👨‍💻 Maintainer
+## 👤 Maintainer
 
-Maintained with by **John**  
-📧 **Email:** [me@kubernetes.day](mailto:me@kubernetes.day). Distributed under the MIT License.
+Maintained by **John** — [me@kubernetes.day](mailto:me@kubernetes.day)
 
-Contributions, bug reports, and feature requests are welcome! Feel free to check the issues page or submit a pull request.
+Distributed under the MIT License. Contributions, bug reports, and feature requests are welcome!
