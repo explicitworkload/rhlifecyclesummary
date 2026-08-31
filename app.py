@@ -453,59 +453,63 @@ LIFECYCLE_TOOLS = [
 
 
 async def execute_tool(tool_name: str, arguments: dict) -> str:
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        if tool_name == "lookup_lifecycle":
-            product_name = arguments.get("product_name", "")
-            version = arguments.get("version")
-            resp = await client.get(API_URL, params={"name": product_name})
-            if resp.status_code != 200:
-                return json.dumps({"error": f"API returned {resp.status_code}"})
-            data = resp.json().get("data", [])
-            if not data:
-                return json.dumps({"error": f"Product '{product_name}' not found. Use list_products to see available names."})
-            product = data[0]
-            versions = product.get("versions", [])
-            if version:
-                matched = [v for v in versions if v.get("name") == version]
-                if not matched:
-                    available = [v.get("name") for v in versions]
-                    return json.dumps({"error": f"Version '{version}' not found", "available_versions": available})
-                target = matched[0]
-            else:
-                target = versions[0] if versions else None
-                if not target:
-                    return json.dumps({"error": "No versions found for this product"})
-            phases = {}
-            for phase in target.get("phases", []):
-                start = phase.get("start_date", "N/A")
-                end = phase.get("end_date") or phase.get("date", "N/A")
-                if isinstance(start, str) and "T" in start:
-                    start = start[:10]
-                if isinstance(end, str) and "T" in end:
-                    end = end[:10]
-                phases[phase.get("name", "Unknown")] = {"start": start, "end": end}
-            result = {
-                "product": product.get("name"),
-                "version": target.get("name"),
-                "current_phase": target.get("type"),
-                "tier": target.get("tier", "N/A"),
-                "openshift_compatibility": target.get("openshift_compatibility", "N/A"),
-                "phases": phases
-            }
-            return json.dumps(result)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            if tool_name == "lookup_lifecycle":
+                product_name = arguments.get("product_name", "")
+                version = arguments.get("version")
+                resp = await client.get(API_URL, params={"name": product_name})
+                if resp.status_code != 200:
+                    return json.dumps({"error": f"API returned {resp.status_code}"})
+                data = resp.json().get("data", [])
+                if not data:
+                    return json.dumps({"error": f"Product '{product_name}' not found. Use list_products to see available names."})
+                product = data[0]
+                versions = product.get("versions", [])
+                if version:
+                    matched = [v for v in versions if v.get("name") == version]
+                    if not matched:
+                        available = [v.get("name") for v in versions]
+                        return json.dumps({"error": f"Version '{version}' not found", "available_versions": available})
+                    target = matched[0]
+                else:
+                    target = versions[0] if versions else None
+                    if not target:
+                        return json.dumps({"error": "No versions found for this product"})
+                phases = {}
+                for phase in target.get("phases", []):
+                    start = phase.get("start_date", "N/A")
+                    end = phase.get("end_date") or phase.get("date", "N/A")
+                    if isinstance(start, str) and "T" in start:
+                        start = start[:10]
+                    if isinstance(end, str) and "T" in end:
+                        end = end[:10]
+                    phases[phase.get("name", "Unknown")] = {"start": start, "end": end}
+                result = {
+                    "product": product.get("name"),
+                    "version": target.get("name"),
+                    "current_phase": target.get("type"),
+                    "tier": target.get("tier", "N/A"),
+                    "openshift_compatibility": target.get("openshift_compatibility", "N/A"),
+                    "phases": phases
+                }
+                return json.dumps(result)
 
-        elif tool_name == "list_products":
-            resp = await client.get(API_URL)
-            if resp.status_code != 200:
-                return json.dumps({"error": f"API returned {resp.status_code}"})
-            data = resp.json().get("data", [])
-            products = [
-                {"name": p.get("name"), "versions_count": len(p.get("versions", []))}
-                for p in data
-            ]
-            return json.dumps({"products": products})
+            elif tool_name == "list_products":
+                resp = await client.get(API_URL)
+                if resp.status_code != 200:
+                    return json.dumps({"error": f"API returned {resp.status_code}"})
+                data = resp.json().get("data", [])
+                products = [
+                    {"name": p.get("name"), "versions_count": len(p.get("versions", []))}
+                    for p in data
+                ]
+                return json.dumps({"products": products})
 
-    return json.dumps({"error": f"Unknown tool: {tool_name}"})
+        return json.dumps({"error": f"Unknown tool: {tool_name}"})
+    except Exception as e:
+        logger.error(f"Tool execution error ({tool_name}): {type(e).__name__}: {e}")
+        return json.dumps({"error": f"Failed to execute {tool_name}: {type(e).__name__}"})
 
 
 class ChatRequest(BaseModel):
