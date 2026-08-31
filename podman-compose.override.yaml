@@ -10,6 +10,8 @@ services:
     restart: always
     volumes:
     - .:/app
+    env_file:
+    - .env
     environment:
     - PYTHONUNBUFFERED=1
     - WATCHFILES_FORCE_POLLING=true

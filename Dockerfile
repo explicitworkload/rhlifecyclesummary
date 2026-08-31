@@ -7,10 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Install runtime dependencies
-RUN pip install --no-cache-dir fastapi uvicorn jinja2 httpx
+RUN pip install --no-cache-dir fastapi uvicorn jinja2 httpx requests
 
 # Copy application files
-COPY app.py .
+COPY app.py azure_token_refresh.py ./
 COPY templates/ ./templates/
 
 # Run as non-root user for security best practices
