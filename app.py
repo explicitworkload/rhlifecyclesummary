@@ -88,29 +88,74 @@ class RealIPLoggingMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # Standard log string output
-        logger.info(
-            f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
-        )
+        # Skip logging internal health checks to keep console output clean
+        if request.url.path != "/health":
+            logger.info(
+                f'{real_ip} - "{request.method} {request.url.path} HTTP/{request.scope.get("http_version", "1.1")}" {response.status_code}'
+            )
         return response
 
 app.add_middleware(RealIPLoggingMiddleware)
 
 
 def clean_date_str(val):
-    """Sanitize date strings by stripping full ISO timestamps and 'N/A' artifacts."""
+    """Sanitize date strings by stripping ISO timestamps, 'N/A' artifacts, and foreign localized strings."""
     if not val or not isinstance(val, str):
         return None
     val = val.strip()
-    if val.upper() in ["N/A", "NONE", "NULL", ""]:
+
+    # Filter out English & Japanese N/A variants
+    na_variations = ["N/A", "NONE", "NULL", "", "該当なし", "該当無し"]
+    if val.upper() in na_variations or val in na_variations:
         return None
-    # Preserve words like "Ongoing"
+
     if val.lower() == "ongoing":
         return "Ongoing"
-    # Strip full ISO timestamps down to YYYY-MM-DD
     if len(val) >= 10 and val[4] == "-" and val[7] == "-":
         return val[:10]
     return val
+
+
+def format_phase_date(phase_data):
+    """Formats phase objects into clean strings while removing foreign N/A prefixes."""
+    if not phase_data:
+        return "N/A"
+
+    if isinstance(phase_data, str):
+        text = (
+            phase_data.replace("N/A to ", "")
+            .replace("N/A - ", "")
+            .replace("該当なし", "")
+            .strip()
+        )
+        cleaned = clean_date_str(text)
+        return cleaned if cleaned else ("N/A" if (text.upper() == "N/A" or not text) else text)
+
+    if isinstance(phase_data, dict):
+        raw_text = phase_data.get("date_description") or phase_data.get("description") or phase_data.get("text")
+        if raw_text and isinstance(raw_text, str):
+            cleaned_raw = (
+                raw_text.replace("N/A to ", "")
+                .replace("N/A - ", "")
+                .replace("該当なし", "")
+                .strip()
+            )
+            if cleaned_raw and cleaned_raw.upper() != "N/A":
+                if len(cleaned_raw) >= 10 and cleaned_raw[4] == "-" and cleaned_raw[7] == "-":
+                    return clean_date_str(cleaned_raw)
+                return cleaned_raw
+
+        start_val = clean_date_str(phase_data.get("start_date_description") or phase_data.get("start_date"))
+        end_val = clean_date_str(phase_data.get("end_date_description") or phase_data.get("end_date") or phase_data.get("date"))
+
+        if start_val and end_val and start_val != end_val:
+            return f"{start_val} to {end_val}"
+        elif end_val:
+            return str(end_val)
+        elif start_val:
+            return str(start_val)
+
+    return "N/A"
 
 def extract_dates(phase_data):
     """Extracts start and end date tuple string for status and days remaining calculations."""
@@ -132,41 +177,6 @@ def calculate_days_remaining(end_date_str):
         return delta
     except ValueError:
         return None
-
-
-def format_phase_date(phase_data):
-    """Formats phase objects into clean strings while preserving text descriptions and removing N/A prefixes."""
-    if not phase_data:
-        return "N/A"
-    
-    if isinstance(phase_data, str):
-        text = phase_data.replace("N/A to ", "").replace("N/A - ", "").strip()
-        cleaned = clean_date_str(text)
-        return cleaned if cleaned else ("N/A" if text.upper() == "N/A" else text)
-
-    if isinstance(phase_data, dict):
-        # 1. Preserve explicit text descriptions if provided by the Red Hat API
-        raw_text = phase_data.get("date_description") or phase_data.get("description") or phase_data.get("text")
-        if raw_text and isinstance(raw_text, str):
-            cleaned_raw = raw_text.replace("N/A to ", "").replace("N/A - ", "").strip()
-            if cleaned_raw and cleaned_raw.upper() != "N/A":
-                if len(cleaned_raw) >= 10 and cleaned_raw[4] == "-" and cleaned_raw[7] == "-":
-                    return clean_date_str(cleaned_raw)
-                return cleaned_raw
-
-        # 2. Extract and sanitize start and end values
-        start_val = clean_date_str(phase_data.get("start_date_description") or phase_data.get("start_date"))
-        end_val = clean_date_str(phase_data.get("end_date_description") or phase_data.get("end_date") or phase_data.get("date"))
-
-        # Only display range if BOTH valid start and end dates exist and differ
-        if start_val and end_val and start_val != end_val:
-            return f"{start_val} to {end_val}"
-        elif end_val:
-            return str(end_val)
-        elif start_val:
-            return str(start_val)
-
-    return "N/A"
 
 
 async def fetch_product_data(client: httpx.AsyncClient, product_name: str, config: dict):

@@ -69,7 +69,6 @@
             white-space: pre-line;
             max-width: 250px;
         }
-        /* Force status cells to stay on a single line */
         .table-custom td.status-col {
             white-space: nowrap !important;
         }
@@ -86,6 +85,65 @@
         .btn-calendar-icon:hover i {
             filter: brightness(1.25);
             transform: scale(1.1);
+        }
+
+        /* Sticky Search & Filter Header */
+        .sticky-search-container {
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+            background-color: #121519;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #212529;
+        }
+
+        /* Responsive Mobile Layout Conversion */
+        @media (max-width: 768px) {
+            .table-custom, 
+            .table-custom tbody, 
+            .table-custom tr, 
+            .table-custom td {
+                display: block;
+                width: 100%;
+            }
+
+            .table-custom thead {
+                display: none;
+            }
+
+            .table-custom tr {
+                margin-bottom: 0.75rem;
+                padding: 0.75rem;
+                border: 1px solid var(--rh-border);
+                border-radius: 6px;
+                background-color: #1a1e24;
+            }
+
+            .table-custom td {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                text-align: right;
+                padding: 0.4rem 0;
+                border-bottom: 1px solid #2b3036;
+                white-space: normal !important;
+                max-width: 100% !important;
+            }
+
+            .table-custom td:last-child {
+                border-bottom: none;
+            }
+
+            .table-custom td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: #adb5bd;
+                text-transform: uppercase;
+                font-size: 0.7rem;
+                text-align: left;
+                padding-right: 0.5rem;
+            }
         }
     </style>
 </head>
@@ -110,8 +168,8 @@
             </div>
         </header>
 
-        <!-- Search Bar -->
-        <div class="row mb-3">
+        <!-- Sticky Search Bar -->
+        <div class="row mb-3 sticky-search-container">
             <div class="col-12 col-md-6">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-dark border-secondary text-secondary"><i class="bi bi-search"></i></span>
@@ -280,41 +338,41 @@
                             `;
                         }
 
-                        const versionCell = `<td class="fw-bold">${v.name}</td>`;
-                        const statusCell = `<td class="status-col"><div class="d-inline-flex align-items-center gap-1"><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}${calendarBtnHtml}</div></td>`;
+                        const versionCell = `<td data-label="Version" class="fw-bold">${v.name}</td>`;
+                        const statusCell = `<td data-label="Status" class="status-col"><div class="d-inline-flex align-items-center gap-1"><span class="badge ${badgeClass}">${realStatus}</span>${urgencyBadge}${calendarBtnHtml}</div></td>`;
 
                         if (isOpenstack) {
                             const els1Val = (v.els1 && v.els1 !== 'N/A') ? v.els1 : v.els;
                             const els2Val = (v.els2 && v.els2 !== 'N/A') ? v.els2 : 'N/A';
                             const els3Val = (v.els3 && v.els3 !== 'N/A') ? v.els3 : 'N/A';
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.third_party}</td><td>${v.maint}</td><td>${els1Val}</td><td>${els2Val}</td><td>${els3Val}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Third-Party Cert">${v.third_party}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS Add-On">${els1Val}</td><td data-label="ELS Term 2">${els2Val}</td><td data-label="ELS Term 3">${els3Val}</td></tr>`;
                         } else if (isRhoso) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="OCP Aligned">${v.ocp_aligned}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS Add-On">${v.els}</td></tr>`;
                         } else if (isRhelAi) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.eol}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="End of Life">${v.eol}</td></tr>`;
                         } else if (isRhel) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.elc}</td><td>${v.long_life}</td><td>${v.final_minor}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELC">${v.elc}</td><td data-label="Long-Life">${v.long_life}</td><td data-label="Final Minor">${v.final_minor}</td></tr>`;
                         } else if (isAap) {
                             const elsVal = (v.els1 && v.els1 !== 'N/A') ? v.els1 : v.els;
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint1}</td><td>${v.maint2}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${elsVal}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance 1">${v.maint1}</td><td data-label="Maintenance 2">${v.maint2}</td><td data-label="EUS Term 1">${v.eus1}</td><td data-label="EUS Term 2">${v.eus2}</td><td data-label="ELS Add-On">${elsVal}</td></tr>`;
                         } else if (isQuay) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ocp_aligned}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="OCP Aligned">${v.ocp_aligned}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="EUS Term 1">${v.eus1}</td><td data-label="EUS Term 2">${v.eus2}</td><td data-label="EUS Term 3">${v.eus3}</td></tr>`;
                         } else if (isEdgeMgr) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td></tr>`;
                         } else if (isMicroshift) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="EUS Term 1">${v.eus1}</td><td data-label="EUS Term 2">${v.eus2}</td></tr>`;
                         } else if (isRhoai) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.eus1}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="EUS Term 1">${v.eus1}</td></tr>`;
                         } else if (isKeycloak) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td></tr>`;
                         } else if (isJboss) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS 1">${v.els1}</td><td data-label="ELS 2">${v.els2}</td></tr>`;
                         } else if (isDataGrid) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td><td>${v.els2}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS 1">${v.els1}</td><td data-label="ELS 2">${v.els2}</td></tr>`;
                         } else if (isSso) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.tier}</td><td>${v.ocp_compat}</td><td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.els1}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS 1">${v.els1}</td></tr>`;
                         } else {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td>${v.ga}</td><td>${v.full}</td><td>${v.maint}</td><td>${v.eus1}</td><td>${v.eus2}</td><td>${v.eus3}</td><td>${v.elc}</td></tr>`;
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="EUS Term 1">${v.eus1}</td><td data-label="EUS Term 2">${v.eus2}</td><td data-label="EUS Term 3">${v.eus3}</td><td data-label="Extended Life">${v.elc}</td></tr>`;
                         }
                     });
 
