@@ -599,6 +599,8 @@ async def chat_endpoint(req: ChatRequest, request: Request):
                 finish_reason = choice.get("finish_reason")
 
                 if finish_reason == "tool_calls" or msg.get("tool_calls"):
+                    if msg.get("content") is None:
+                        msg["content"] = ""
                     messages.append(msg)
                     for tool_call in msg.get("tool_calls", []):
                         fn = tool_call.get("function", {})
