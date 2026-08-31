@@ -205,13 +205,13 @@
         .chat-panel.auto-scaled { }
         @media (max-width: 576px) {
             .chat-panel, .chat-panel.expanded {
-                width: 100vw;
-                height: 100vh;
-                bottom: 0;
-                right: 0;
-                border-radius: 0;
-                max-width: 100vw;
-                max-height: 100vh;
+                width: 96vw;
+                height: 80dvh;
+                bottom: 0.5rem;
+                right: 2vw;
+                border-radius: 12px;
+                max-width: 96vw;
+                max-height: 80dvh;
                 resize: none;
             }
         }
@@ -241,7 +241,7 @@
             border-radius: 16px 16px 0 0;
         }
         .chat-header:active { cursor: grabbing; }
-        .chat-header h6 { margin: 0; font-weight: 600; font-size: 0.85rem; }
+        .chat-header h6 { margin: 0; font-weight: 600; font-size: 1.05rem; }
         .chat-header-controls { display: flex; gap: 0.25rem; }
         .chat-header-controls .btn {
             width: 28px;
@@ -382,7 +382,7 @@
             </div>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <a href="https://github.com/explicitworkload/rhlifecyclesummary" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light btn-sm">
-                    <i class="bi bi-github me-1"></i>GitHub
+                    <i class="bi bi-github"></i>
                 </a>
                 <button id="expiringFilterBtn" class="btn btn-outline-warning btn-sm" onclick="toggleExpiringFilter()"><i class="bi bi-exclamation-triangle me-1"></i>Expiring Soon (< 120d)</button>
                 <button id="toggleAccordionsBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAccordions()">
