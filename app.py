@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from difflib import get_close_matches
 import json
 import logging
 import os
@@ -420,7 +421,43 @@ When users ask about notifications, reminders, or alerts for EOL/support dates, 
 State dates concretely. Flag EOL products for immediate upgrade. Flag products within 12 months of EOL as urgent.
 If a user asks about adding new products to the dashboard, direct them to open an issue or contribute at https://github.com/explicitworkload/rhlifecyclesummary.
 Never mention internal tool names (lookup_lifecycle, list_products) to users. These are your internal tools — users cannot see or use them. Instead of saying "use the lookup_lifecycle tool", just look up the data yourself and present the answer.
-Keep answers concise with markdown formatting.
+Keep answers concise with markdown formatting. Be friendly and conversational — offer to look up other versions or products, and proactively suggest helpful next steps.
+
+## Response Format
+When reporting lifecycle status for a specific product version, include the key facts below, but wrap them in natural, friendly language — don't just output a rigid template:
+
+### [Product] [Version]
+**Phase:** [current phase]
+**Dates:** GA [date] | End Full Support [date] | End Maintenance [date] | EOL [date] (include EUS/ELS end dates if applicable)
+
+**What this means:** 1-2 sentences on what updates this version currently receives and what it does not.
+
+**Action:**
+- Full Support → "Apply updates on your normal cadence."
+- Maintenance Support → "Security patches only. Plan upgrade to [next version] before [EOL date]."
+- Within 12 months of EOL → "**Upgrade required by [date].** Start migration planning now."
+- EOL/Extended Life → "**No security fixes available.** Upgrade immediately to [recommended version]."
+- EUS/E4S active → "Extended support is active — verify subscription coverage. Do not apply minor release upgrades while on EUS."
+
+## Lifecycle Phase Reference
+RHEL 8/9/10 — 10-year lifecycle:
+- Full Support (~yr 1-5): Critical/Important/Moderate CVEs (CVSS ≥7) + urgent bugs + hardware enablement + minor releases every ~6 months
+- Maintenance Support (~yr 5-10): same security criteria, urgent bugs only — no new features, no new minor releases
+- Extended Life (after yr 10): no fixes; read-only portal access only
+- Add-ons (purchased separately): EUS = 24-month minor release freeze; Enhanced EUS = 48 months; E4S = 48 months for SAP; ELS = post-EOL Critical/Important fixes for RHEL 6/7
+
+OCP 4.x — 18-month lifecycle per minor:
+- Full Support: 6 months from GA (or 90 days after next minor, whichever is longer) — Critical/Important CVEs + urgent bugs
+- Maintenance Support: through 18 months — Critical/Important CVEs only
+- EUS (even minors: 4.12, 4.14, 4.16, ...): Term 1 +6mo, Terms 2-3 +12mo each; max 48 months total
+
+## Red Hat Versioning & Backports
+Applies to all Red Hat products (RHEL, OpenShift, Ansible, JBoss, Satellite, etc.).
+- Backporting model: Red Hat backports security fixes into the shipped package version rather than rebasing to upstream. A package version that looks "old" compared to upstream may still carry all critical/important CVE fixes. Default for most packages; exceptions (e.g., Firefox, kernel-rt) do rebase.
+- RHEL minor release cadence: New RHEL minor releases (~every 6 months during Full Support) deliver hardware enablement and selected enhancements. `dnf update` within a minor never moves a system to a new major version.
+- RHEL package version format: `name-version-release.elX`. The version field tracks the upstream base (e.g., `1.1.1k`); the release counter (e.g., `-7.el8` → `-8.el8`) increments for each backported fix. Same version + higher release = fix applied.
+- When asked "is my package up to date?" or "why is the version so old?", explain the backporting model. Never use upstream version as a measure of patch currency.
+- Red Hat guarantees ABI compatibility within a RHEL major version; an app built on RHEL 9.0 runs unchanged on any RHEL 9.x.
 """
 
 LIFECYCLE_TOOLS = [
@@ -459,6 +496,82 @@ LIFECYCLE_TOOLS = [
 ]
 
 
+def _enrich_lifecycle_result(result: dict) -> dict:
+    """Add pre-computed key dates, status summary, and urgency so the LLM can relay them directly."""
+    phases = result.get("phases", {})
+    today_dt = datetime.now()
+    today_str = today_dt.strftime("%Y-%m-%d")
+
+    def _find_date(fragment, field="end"):
+        for name, dates in phases.items():
+            if fragment.lower() in name.lower():
+                val = dates.get(field)
+                if val and str(val).upper() not in ("N/A", "NONE", ""):
+                    return val
+        return None
+
+    def _find_last_date(fragment):
+        latest = None
+        for name, dates in phases.items():
+            if fragment.lower() in name.lower():
+                val = dates.get("end")
+                if val and str(val).upper() not in ("N/A", "NONE", ""):
+                    if latest is None or val > latest:
+                        latest = val
+        return latest
+
+    ga_date = _find_date("general availability", "end")
+    full_support_end = _find_date("full support", "end")
+    maintenance_end = _find_last_date("maintenance")
+    eus_end = _find_last_date("extended update")
+    els_end = _find_last_date("extended life cycle support") or _find_last_date("els")
+    eol_date = _find_date("end of life", "end") or _find_date("extended life phase", "end")
+
+    included_support_end = maintenance_end or full_support_end
+
+    days_remaining = None
+    if included_support_end:
+        try:
+            days_remaining = (datetime.strptime(included_support_end, "%Y-%m-%d") - today_dt).days
+        except ValueError:
+            pass
+
+    key_dates = {"today": today_str}
+    if ga_date:
+        key_dates["ga_date"] = ga_date
+    if full_support_end:
+        key_dates["full_support_end"] = full_support_end
+    if maintenance_end:
+        key_dates["maintenance_end"] = maintenance_end
+    if eus_end:
+        key_dates["eus_end"] = eus_end
+        key_dates["eus_note"] = "EUS requires a separate paid subscription"
+    if els_end:
+        key_dates["els_end"] = els_end
+    if eol_date:
+        key_dates["eol_date"] = eol_date
+    if days_remaining is not None:
+        key_dates["days_until_support_end"] = days_remaining
+
+    result["key_dates"] = key_dates
+
+    if days_remaining is not None:
+        if days_remaining < 0:
+            result["status_summary"] = f"END OF LIFE — included support ended {included_support_end} ({abs(days_remaining)} days ago). No security fixes available."
+            result["urgency"] = "eol"
+            result["action"] = "Upgrade immediately."
+        elif days_remaining <= 365:
+            result["status_summary"] = f"URGENT — included support ends {included_support_end} ({days_remaining} days remaining). Plan upgrade now."
+            result["urgency"] = "urgent"
+            result["action"] = f"Start migration planning. Upgrade before {included_support_end}."
+        else:
+            result["status_summary"] = f"Supported — included support ends {included_support_end} ({days_remaining} days remaining)."
+            result["urgency"] = "normal"
+            result["action"] = "Apply updates on your normal cadence."
+
+    return result
+
+
 async def execute_tool(tool_name: str, arguments: dict) -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -470,11 +583,26 @@ async def execute_tool(tool_name: str, arguments: dict) -> str:
                     return json.dumps({"error": f"API returned {resp.status_code}"})
                 data = resp.json().get("data", [])
                 if not data:
+                    all_resp = await client.get(API_URL)
+                    if all_resp.status_code == 200:
+                        all_data = all_resp.json().get("data", [])
+                        names_lower = {p["name"].lower(): p for p in all_data}
+                        matches = get_close_matches(product_name.lower(), names_lower.keys(), n=3, cutoff=0.5)
+                        if matches:
+                            data = [names_lower[matches[0]]]
+                            logger.info(f"Fuzzy matched '{product_name}' -> '{data[0]['name']}'")
+                if not data:
                     return json.dumps({"error": f"Product '{product_name}' not found. Use list_products to see available names."})
                 product = data[0]
                 versions = product.get("versions", [])
                 if version:
                     matched = [v for v in versions if v.get("name") == version]
+                    if not matched:
+                        for v in versions:
+                            vn = v.get("name", "")
+                            if vn.startswith(version + ".") or version.startswith(vn + "."):
+                                matched = [v]
+                                break
                     if not matched:
                         available = [v.get("name") for v in versions]
                         return json.dumps({"error": f"Version '{version}' not found", "available_versions": available})
@@ -492,14 +620,14 @@ async def execute_tool(tool_name: str, arguments: dict) -> str:
                     if isinstance(end, str) and "T" in end:
                         end = end[:10]
                     phases[phase.get("name", "Unknown")] = {"start": start, "end": end}
-                result = {
+                result = _enrich_lifecycle_result({
                     "product": product.get("name"),
                     "version": target.get("name"),
                     "current_phase": target.get("type"),
                     "tier": target.get("tier", "N/A"),
                     "openshift_compatibility": target.get("openshift_compatibility", "N/A"),
                     "phases": phases
-                }
+                })
                 return json.dumps(result)
 
             elif tool_name == "list_products":

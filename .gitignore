@@ -4,4 +4,4 @@
 .mcp.json
 CLAUDE.md
 .env
-getallmodels.py
+__pycache__/
