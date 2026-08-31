@@ -176,6 +176,17 @@
                     <input type="text" id="searchInput" class="form-control bg-dark text-light border-secondary" placeholder="Search products or version numbers (e.g. RHEL, 2.4, OpenShift)..." onkeyup="filterProducts()">
                 </div>
             </div>
+            <div class="col-12 col-md-6 mt-2 mt-md-0 d-flex align-items-center gap-2">
+                <span class="text-secondary small text-nowrap"><i class="bi bi-funnel me-1"></i>Hide:</span>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" id="hideEol" checked onchange="filterProducts()">
+                    <label class="form-check-label small text-light" for="hideEol">End of Life</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input" type="checkbox" id="hideEom" checked onchange="filterProducts()">
+                    <label class="form-check-label small text-light" for="hideEom">End of Maintenance</label>
+                </div>
+            </div>
         </div>
 
         <!-- Disclaimer Banner -->
@@ -314,7 +325,7 @@
                         const isExpiringSoon = v.days_remaining !== null && v.days_remaining >= 0 && v.days_remaining <= 120;
                         if (isExpiringSoon) hasExpiringVersions = true;
 
-                        const rowClass = isExpiringSoon ? 'expiring-row' : '';
+                        const rowClass = `${isExpiringSoon ? 'expiring-row' : ''} ${statusLower.includes('end of life') ? 'status-eol' : ''} ${statusLower.includes('end of maintenance') ? 'status-eom' : ''}`.trim();
 
                         const isExcludedFromCalendar = statusLower.includes('end of life') || statusLower.includes('end of maintenance');
 
@@ -419,7 +430,7 @@
                             <h2 class="accordion-header" id="heading${index}">
                                 <button class="accordion-button accordion-button-rh ${buttonCollapsedClass} d-flex justify-content-between align-items-center" type="button" data-bs-toggle="collapse" data-bs-target="#${accordionId}" aria-expanded="${isExpanded}" aria-controls="${accordionId}">
                                     <span>${prod.product_name}</span>
-                                    <span class="badge bg-secondary me-3 small font-monospace">${prod.versions.length} versions</span>
+                                    <span class="badge bg-secondary ms-2 me-3 small font-monospace">${prod.versions.length} versions</span>
                                 </button>
                             </h2>
                             <div id="${accordionId}" class="accordion-collapse collapse ${showClass}" aria-labelledby="heading${index}">
@@ -444,6 +455,7 @@
 
                 document.getElementById('loading').classList.add('d-none');
                 container.classList.remove('d-none');
+                filterProducts();
             } catch (err) {
                 console.error("Failed to load lifecycle data", err);
             }
@@ -494,13 +506,28 @@
 
         function filterProducts() {
             const query = document.getElementById('searchInput').value.toLowerCase();
+            const hideEol = document.getElementById('hideEol').checked;
+            const hideEom = document.getElementById('hideEom').checked;
             const cards = document.querySelectorAll('.product-card');
 
             cards.forEach(card => {
                 const textMatches = card.textContent.toLowerCase().includes(query);
                 const matchesExpiring = !showOnlyExpiring || card.classList.contains('has-expiring');
 
-                if (textMatches && matchesExpiring) {
+                const rows = card.querySelectorAll('tbody tr');
+                let visibleRows = 0;
+                rows.forEach(row => {
+                    const isEol = row.classList.contains('status-eol');
+                    const isEom = row.classList.contains('status-eom');
+                    if ((hideEol && isEol) || (hideEom && isEom)) {
+                        row.classList.add('d-none');
+                    } else {
+                        row.classList.remove('d-none');
+                        visibleRows++;
+                    }
+                });
+
+                if (textMatches && matchesExpiring && visibleRows > 0) {
                     card.classList.remove('d-none');
                 } else {
                     card.classList.add('d-none');
