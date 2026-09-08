@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir fastapi uvicorn jinja2 httpx requests
 # Copy application files
 COPY app.py azure_token_refresh.py ./
 COPY templates/ ./templates/
+COPY static/ ./static/
 
 # Run as non-root user for security best practices
 RUN useradd -u 1001 appuser && chown -R appuser:appuser /app
