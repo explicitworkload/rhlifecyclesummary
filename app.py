@@ -9,6 +9,7 @@ import re
 from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ from azure_token_refresh import AZURE_CONFIGURED, get_token as azure_get_token, 
 
 # 1. Initialize App & Logger
 app = FastAPI(title="Red Hat Product Life Cycle Dashboard")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 azure_start_refresh()
