@@ -84,6 +84,9 @@ PRODUCTS_CONFIG = {
     "Red Hat OpenStack Services on OpenShift": {
         "link": "https://access.redhat.com/support/policy/updates/openstack/platform"
     },
+    "Red Hat Satellite Server": {
+        "link": "https://access.redhat.com/support/policy/updates/satellite/"
+    },
 }
 
 API_URL = "https://access.redhat.com/product-life-cycles/api/v1/products"
@@ -443,7 +446,7 @@ LIFECYCLE_TOOLS = [
                 "properties": {
                     "product_name": {
                         "type": "string",
-                        "description": "The exact Red Hat product name. Must match one of: 'Red Hat Enterprise Linux', 'Red Hat Enterprise Linux AI', 'Red Hat OpenShift Container Platform', 'Red Hat OpenShift AI Self-Managed', 'Red Hat Ansible Automation Platform', 'Red Hat Quay', 'Red Hat build of Keycloak', 'Red Hat Single Sign-On', 'Red Hat JBoss Enterprise Application Platform', 'Red Hat Data Grid', 'Red Hat Edge Manager', 'Red Hat build of MicroShift', 'Red Hat OpenStack Platform'. Use list_products if unsure."
+                        "description": "The exact Red Hat product name. Must match one of: 'Red Hat Enterprise Linux', 'Red Hat Enterprise Linux AI', 'Red Hat OpenShift Container Platform', 'Red Hat OpenShift AI Self-Managed', 'Red Hat Ansible Automation Platform', 'Red Hat Quay', 'Red Hat build of Keycloak', 'Red Hat Single Sign-On', 'Red Hat JBoss Enterprise Application Platform', 'Red Hat Data Grid', 'Red Hat Edge Manager', 'Red Hat build of MicroShift', 'Red Hat OpenStack Platform', 'Red Hat Satellite Server'. Use list_products if unsure."
                     },
                     "version": {
                         "type": "string",

@@ -588,6 +588,7 @@
                     const isEdgeMgr = nameLower.includes("edge manager");
                     const isMicroshift = nameLower.includes("microshift");
                     const isSso = nameLower.includes("single sign-on") || nameLower.includes("single sign on");
+                    const isSatellite = nameLower.includes("satellite");
 
                     let hasExpiringVersions = false;
 
@@ -662,6 +663,8 @@
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS 1">${v.els1}</td><td data-label="ELS 2">${v.els2}</td></tr>`;
                         } else if (isSso) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="Tier">${v.tier}</td><td data-label="OCP Compat">${v.ocp_compat}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS 1">${v.els1}</td></tr>`;
+                        } else if (isSatellite) {
+                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="EUS">${v.eus1}</td></tr>`;
                         } else {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="EUS Term 1">${v.eus1}</td><td data-label="EUS Term 2">${v.eus2}</td><td data-label="EUS Term 3">${v.eus3}</td><td data-label="Extended Life">${v.elc}</td></tr>`;
                         }
@@ -699,6 +702,8 @@
                         tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th><th>Extended Life Support (ELS) 2</th>`;
                     } else if (isSso) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>Tier</th><th>OpenShift Compatibility</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Support (ELS) 1</th>`;
+                    } else if (isSatellite) {
+                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Update Support</th>`;
                     } else {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>EUS Term 1</th><th>EUS Term 2</th><th>EUS Term 3</th><th>Extended Life Phase</th>`;
                     }
