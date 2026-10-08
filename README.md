@@ -110,7 +110,7 @@ The Lifecycle Advisor tries backends in order: **primary → Azure → Groq**. T
 
 | Variable | Required | Description |
 | :--- | :--- | :--- |
-| `PRIMARY_API_URL` | No | Primary LLM endpoint (OpenAI-compatible `/chat/completions`). Setting this enables the primary backend |
+| `PRIMARY_API_URL` | No | Primary LLM endpoint — full URL **including** `/chat/completions`. Setting this enables the primary backend |
 | `PRIMARY_MODEL` | No | Model name for the primary endpoint (default `qwen38-27b`) |
 | `PRIMARY_API_KEY` | No | Bearer token for the primary endpoint — omit if it needs no auth |
 | `GROQ_API_KEY` | No | Groq API key (fallback LLM) |
