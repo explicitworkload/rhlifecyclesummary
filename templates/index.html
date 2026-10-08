@@ -1124,27 +1124,94 @@
             document.getElementById('chatSendBtn').disabled = true;
             showTypingIndicator();
 
+            let bubble = null;
+            let answer = '';
+            let renderQueued = false;
+
+            // Repaint at most once per frame — deltas arrive far faster than the eye.
+            function paint() {
+                if (renderQueued) return;
+                renderQueued = true;
+                requestAnimationFrame(() => {
+                    renderQueued = false;
+                    if (!bubble) return;
+                    bubble.innerHTML = renderMarkdown(answer);
+                    const container = document.getElementById('chatMessages');
+                    container.scrollTop = container.scrollHeight;
+                });
+            }
+
+            function handleEvent(name, data) {
+                if (name === 'status') {
+                    const el = document.getElementById('chatTyping');
+                    if (el && data.text) {
+                        el.innerHTML = '<span class="dot">&#8226;</span> <span class="dot">&#8226;</span> <span class="dot">&#8226;</span> ' + data.text;
+                    }
+                } else if (name === 'delta') {
+                    if (!bubble) {
+                        removeTypingIndicator();
+                        bubble = appendChatBubble('assistant', '');
+                    }
+                    answer += data.text;
+                    paint();
+                } else if (name === 'error') {
+                    removeTypingIndicator();
+                    if (!bubble) bubble = appendChatBubble('assistant', '');
+                    answer = answer || ('Something went wrong: ' + (data.error || 'unknown error'));
+                    paint();
+                }
+            }
+
             try {
                 const resp = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message, history: chatHistory })
                 });
-                removeTypingIndicator();
 
-                if (!resp.ok) {
+                if (!resp.ok || !resp.body) {
+                    removeTypingIndicator();
                     const err = await resp.json().catch(() => ({}));
                     appendChatBubble('assistant', err.error || 'Something went wrong. Please try again.');
                 } else {
-                    const data = await resp.json();
-                    appendChatBubble('assistant', data.response);
-                    chatHistory.push({ role: 'user', content: message });
-                    chatHistory.push({ role: 'assistant', content: data.response });
-                    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+                    const reader = resp.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // SSE frames are separated by a blank line.
+                        let sep;
+                        while ((sep = buffer.indexOf('\n\n')) !== -1) {
+                            const frame = buffer.slice(0, sep);
+                            buffer = buffer.slice(sep + 2);
+                            let name = 'message';
+                            let raw = '';
+                            frame.split('\n').forEach(line => {
+                                if (line.startsWith('event:')) name = line.slice(6).trim();
+                                else if (line.startsWith('data:')) raw += line.slice(5).trim();
+                            });
+                            if (!raw) continue;
+                            try { handleEvent(name, JSON.parse(raw)); } catch (e) { /* ignore partial frame */ }
+                        }
+                    }
+
+                    removeTypingIndicator();
+                    if (answer) {
+                        chatHistory.push({ role: 'user', content: message });
+                        chatHistory.push({ role: 'assistant', content: answer });
+                        if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+                        setTimeout(autoScaleChat, 50);
+                    } else if (!bubble) {
+                        appendChatBubble('assistant', 'No response received. Please try again.');
+                    }
                 }
             } catch (e) {
                 removeTypingIndicator();
-                appendChatBubble('assistant', 'Failed to connect to the advisor. Please try again.');
+                if (!answer) appendChatBubble('assistant', 'Failed to connect to the advisor. Please try again.');
             } finally {
                 chatBusy = false;
                 document.getElementById('chatSendBtn').disabled = false;

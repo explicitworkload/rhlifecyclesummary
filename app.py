@@ -8,7 +8,7 @@ import re
 
 from typing import Optional
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
@@ -662,7 +662,7 @@ async def chat_endpoint(req: ChatRequest, request: Request):
 
     log_prefix = f"[chat] {client_ip}"
 
-    async def call_llm(client, payload, step_label=""):
+    def build_backends(step_label):
         backends = []
         if PRIMARY_CONFIGURED:
             primary_hdrs = {"Content-Type": "application/json"}
@@ -677,78 +677,171 @@ async def chat_endpoint(req: ChatRequest, request: Request):
                 logger.warning(f"{log_prefix} {step_label} Azure token fetch failed: {e}, skipping Azure")
         if GROQ_API_KEY:
             backends.append(("groq", GROQ_API_URL, {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}, GROQ_MODEL))
+        return backends
 
-        resp = None
-        for backend_name, url, hdrs, model in backends:
-            backend_payload = {**payload, "model": model}
+    async def stream_llm(client, payload, step_label):
+        """Stream one LLM turn, trying each backend in priority order.
+
+        Yields ("delta", text) as content arrives, then ("message", (msg, finish_reason)).
+        Content deltas are relayed to the browser immediately, so a backend can only be
+        abandoned for the next one while nothing has been emitted yet.
+        """
+        for backend_name, url, hdrs, model in build_backends(step_label):
+            tag = f"[{backend_name}:{model}]"
+            # include_usage makes the backend emit a final chunk carrying token counts,
+            # which a plain stream omits.
+            backend_payload = {**payload, "model": model, "stream": True, "stream_options": {"include_usage": True}}
             for attempt in range(3):
-                resp = await client.post(url, headers=hdrs, json=backend_payload)
-                if resp.status_code == 429:
-                    retry_after = float(resp.headers.get("retry-after", "20"))
-                    logger.warning(f"{log_prefix} {step_label} [{backend_name}] rate limited, retrying in {retry_after}s (attempt {attempt+1}/3)")
-                    await asyncio.sleep(retry_after)
-                    continue
-                if resp.status_code == 200:
-                    usage = resp.json().get("usage", {})
-                    logger.info(f"{log_prefix} {step_label} [{backend_name}] ok — prompt={usage.get('prompt_tokens',0)} completion={usage.get('completion_tokens',0)} total={usage.get('total_tokens',0)}")
-                    return resp
-                else:
-                    logger.error(f"{log_prefix} {step_label} [{backend_name}] error {resp.status_code}: {resp.text[:200]}")
+                emitted = False
+                try:
+                    async with client.stream("POST", url, headers=hdrs, json=backend_payload) as resp:
+                        if resp.status_code == 429:
+                            await resp.aread()
+                            retry_after = float(resp.headers.get("retry-after", "20"))
+                            logger.warning(f"{log_prefix} {step_label} {tag} rate limited, retrying in {retry_after}s (attempt {attempt+1}/3)")
+                            await asyncio.sleep(retry_after)
+                            continue
+                        if resp.status_code != 200:
+                            body = (await resp.aread()).decode("utf-8", "replace")[:200]
+                            logger.error(f"{log_prefix} {step_label} {tag} error {resp.status_code}: {body}")
+                            break
+
+                        content_parts = []
+                        tool_slots = {}
+                        finish_reason = None
+                        usage = {}
+
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data = line[5:].strip()
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+                            if chunk.get("usage"):
+                                usage = chunk["usage"]
+                            choices = chunk.get("choices") or []
+                            if not choices:
+                                continue
+                            choice = choices[0]
+                            if choice.get("finish_reason"):
+                                finish_reason = choice["finish_reason"]
+                            delta = choice.get("delta") or {}
+                            text = delta.get("content")
+                            if text:
+                                content_parts.append(text)
+                                emitted = True
+                                yield "delta", text
+                            # Tool call fragments arrive split across chunks, keyed by index.
+                            for tc in delta.get("tool_calls") or []:
+                                slot = tool_slots.setdefault(
+                                    tc.get("index", 0),
+                                    {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                                )
+                                if tc.get("id"):
+                                    slot["id"] = tc["id"]
+                                fn = tc.get("function") or {}
+                                if fn.get("name"):
+                                    slot["function"]["name"] = fn["name"]
+                                if fn.get("arguments"):
+                                    slot["function"]["arguments"] += fn["arguments"]
+
+                        content = "".join(content_parts)
+                        logger.info(
+                            f"{log_prefix} {step_label} {tag} ok — "
+                            f"prompt={usage.get('prompt_tokens', '?')} completion={usage.get('completion_tokens', '?')} "
+                            f"total={usage.get('total_tokens', '?')} chars={len(content)}"
+                        )
+                        message = {"role": "assistant", "content": content}
+                        if tool_slots:
+                            message["tool_calls"] = [tool_slots[i] for i in sorted(tool_slots)]
+                        yield "message", (message, finish_reason)
+                        return
+                except Exception as e:
+                    if emitted:
+                        raise
+                    logger.error(f"{log_prefix} {step_label} {tag} stream failed: {type(e).__name__}: {e}")
                     break
-            logger.warning(f"{log_prefix} {step_label} [{backend_name}] failed, trying next backend")
+            logger.warning(f"{log_prefix} {step_label} {tag} failed, trying next backend")
 
-        if resp is None:
-            raise RuntimeError("No LLM backend available")
-        return resp
+        raise RuntimeError("All LLM backends failed")
 
-    max_iterations = 12
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            for iteration in range(max_iterations):
-                payload = {
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "max_tokens": 1024
-                }
-                if iteration < max_iterations - 1:
-                    payload["tools"] = LIFECYCLE_TOOLS
-                else:
-                    logger.info(f"{log_prefix} final iteration — forcing answer without tools")
-                resp = await call_llm(client, payload, step_label=f"step {iteration+1}/{max_iterations}")
-                if resp.status_code != 200:
-                    logger.error(f"{log_prefix} LLM returned {resp.status_code}: {resp.text[:300]}")
-                    return JSONResponse(status_code=resp.status_code, content={"error": resp.text})
+    def sse(event, data):
+        return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-                result = resp.json()
-                choice = result.get("choices", [{}])[0]
-                msg = choice.get("message", {})
-                finish_reason = choice.get("finish_reason")
+    async def event_stream():
+        # Flush immediately so proxies and CDNs see bytes before the first token,
+        # instead of a long silent request they may terminate.
+        yield sse("status", {"text": "Thinking…"})
 
-                if finish_reason == "tool_calls" or msg.get("tool_calls"):
-                    if msg.get("content") is None:
-                        msg["content"] = ""
-                    messages.append(msg)
-                    for tool_call in msg.get("tool_calls", []):
-                        fn = tool_call.get("function", {})
-                        tool_name = fn.get("name", "")
-                        try:
-                            arguments = json.loads(fn.get("arguments", "{}"))
-                        except json.JSONDecodeError:
-                            arguments = {}
-                        logger.info(f"{log_prefix} step {iteration+1}/{max_iterations} tool={tool_name} args={arguments}")
-                        tool_result = await execute_tool(tool_name, arguments)
-                        if len(tool_result) > 2000:
-                            tool_result = tool_result[:2000] + '..."}'
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call.get("id", ""),
-                            "content": tool_result
-                        })
-                    continue
+        max_iterations = 12
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                answered = False
+                for iteration in range(max_iterations):
+                    step_label = f"step {iteration+1}/{max_iterations}"
+                    payload = {
+                        "messages": messages,
+                        "temperature": 0.3,
+                        "max_tokens": 1024
+                    }
+                    if iteration < max_iterations - 1:
+                        payload["tools"] = LIFECYCLE_TOOLS
+                    else:
+                        logger.info(f"{log_prefix} final iteration — forcing answer without tools")
 
-                return JSONResponse(content={"response": msg.get("content", "")})
+                    assistant_msg = None
+                    finish_reason = None
+                    async for kind, value in stream_llm(client, payload, step_label):
+                        if kind == "delta":
+                            yield sse("delta", {"text": value})
+                        else:
+                            assistant_msg, finish_reason = value
 
-        return JSONResponse(content={"response": "I wasn't able to complete the lookup. Please try again."})
-    except Exception as e:
-        logger.error(f"{log_prefix} chat error: {type(e).__name__}: {e}")
-        return JSONResponse(status_code=500, content={"error": f"Internal error: {type(e).__name__}: {str(e)}"})
+                    if assistant_msg is None:
+                        break
+
+                    if finish_reason == "tool_calls" or assistant_msg.get("tool_calls"):
+                        messages.append(assistant_msg)
+                        for tool_call in assistant_msg.get("tool_calls", []):
+                            fn = tool_call.get("function", {})
+                            tool_name = fn.get("name", "")
+                            try:
+                                arguments = json.loads(fn.get("arguments", "{}"))
+                            except json.JSONDecodeError:
+                                arguments = {}
+                            logger.info(f"{log_prefix} {step_label} tool={tool_name} args={arguments}")
+                            yield sse("status", {"text": "Looking up lifecycle data…"})
+                            tool_result = await execute_tool(tool_name, arguments)
+                            if len(tool_result) > 2000:
+                                tool_result = tool_result[:2000] + '..."}'
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.get("id", ""),
+                                "content": tool_result
+                            })
+                        continue
+
+                    answered = bool(assistant_msg.get("content"))
+                    break
+
+                if not answered:
+                    yield sse("delta", {"text": "I wasn't able to complete the lookup. Please try again."})
+
+            yield sse("done", {})
+        except Exception as e:
+            logger.error(f"{log_prefix} chat error: {type(e).__name__}: {e}")
+            yield sse("error", {"error": f"{type(e).__name__}: {e}"})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
