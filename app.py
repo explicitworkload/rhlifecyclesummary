@@ -16,7 +16,7 @@ from pydantic import BaseModel
 import traceback
 
 from starlette.middleware.base import BaseHTTPMiddleware
-from azure_token_refresh import AZURE_CONFIGURED, get_token as azure_get_token, get_chat_url as azure_get_chat_url, start_background_refresh as azure_start_refresh
+from azure_token_refresh import AZURE_CONFIGURED, DEPLOYMENT as AZURE_DEPLOYMENT, get_token as azure_get_token, get_chat_url as azure_get_chat_url, start_background_refresh as azure_start_refresh
 
 # 1. Initialize App & Logger
 app = FastAPI(title="Red Hat Product Life Cycle Dashboard")
@@ -407,7 +407,15 @@ async def read_dashboard(request: Request):
     return response
 
 
-# --- Lifecycle Advisor Chatbot (Groq) ---
+# --- Lifecycle Advisor Chatbot (primary -> Azure -> Groq fallback chain) ---
+
+# Primary backend: any OpenAI-compatible /chat/completions endpoint (vLLM, Ollama,
+# llama.cpp, OpenRouter, ...). PRIMARY_API_KEY is optional — omit it for endpoints
+# that don't require auth. Setting PRIMARY_API_URL is what enables this backend.
+PRIMARY_API_KEY = os.environ.get("PRIMARY_API_KEY", "")
+PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "qwen38-27b")
+PRIMARY_API_URL = os.environ.get("PRIMARY_API_URL", "")
+PRIMARY_CONFIGURED = bool(PRIMARY_API_URL)
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-safeguard-20b")
@@ -638,10 +646,10 @@ async def chat_endpoint(req: ChatRequest, request: Request):
         or (request.client.host if request.client else "unknown")
     )
 
-    if not GROQ_API_KEY and not AZURE_CONFIGURED:
+    if not PRIMARY_CONFIGURED and not AZURE_CONFIGURED and not GROQ_API_KEY:
         return JSONResponse(
             status_code=503,
-            content={"error": "Lifecycle Advisor is not configured. Set AZURE_OPENAI_* or GROQ_API_KEY environment variables."}
+            content={"error": "Lifecycle Advisor is not configured. Set PRIMARY_API_URL, AZURE_OPENAI_* or GROQ_API_KEY environment variables."}
         )
 
     today = datetime.now().strftime("%Y-%m-%d")
@@ -656,18 +664,25 @@ async def chat_endpoint(req: ChatRequest, request: Request):
 
     async def call_llm(client, payload, step_label=""):
         backends = []
+        if PRIMARY_CONFIGURED:
+            primary_hdrs = {"Content-Type": "application/json"}
+            if PRIMARY_API_KEY:
+                primary_hdrs["Authorization"] = f"Bearer {PRIMARY_API_KEY}"
+            backends.append(("primary", PRIMARY_API_URL, primary_hdrs, PRIMARY_MODEL))
         if AZURE_CONFIGURED:
             try:
                 token = azure_get_token()
-                backends.append(("azure", azure_get_chat_url(), {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}))
+                backends.append(("azure", azure_get_chat_url(), {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, AZURE_DEPLOYMENT))
             except Exception as e:
                 logger.warning(f"{log_prefix} {step_label} Azure token fetch failed: {e}, skipping Azure")
         if GROQ_API_KEY:
-            backends.append(("groq", GROQ_API_URL, {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}))
+            backends.append(("groq", GROQ_API_URL, {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}, GROQ_MODEL))
 
-        for backend_name, url, hdrs in backends:
+        resp = None
+        for backend_name, url, hdrs, model in backends:
+            backend_payload = {**payload, "model": model}
             for attempt in range(3):
-                resp = await client.post(url, headers=hdrs, json=payload)
+                resp = await client.post(url, headers=hdrs, json=backend_payload)
                 if resp.status_code == 429:
                     retry_after = float(resp.headers.get("retry-after", "20"))
                     logger.warning(f"{log_prefix} {step_label} [{backend_name}] rate limited, retrying in {retry_after}s (attempt {attempt+1}/3)")
@@ -682,6 +697,8 @@ async def chat_endpoint(req: ChatRequest, request: Request):
                     break
             logger.warning(f"{log_prefix} {step_label} [{backend_name}] failed, trying next backend")
 
+        if resp is None:
+            raise RuntimeError("No LLM backend available")
         return resp
 
     max_iterations = 12
@@ -689,7 +706,6 @@ async def chat_endpoint(req: ChatRequest, request: Request):
         async with httpx.AsyncClient(timeout=90.0) as client:
             for iteration in range(max_iterations):
                 payload = {
-                    "model": GROQ_MODEL,
                     "messages": messages,
                     "temperature": 0.3,
                     "max_tokens": 1024
