@@ -421,6 +421,44 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-safeguard-20b")
 GROQ_API_URL = os.environ.get("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
 
+# Order the advisor tries its backends in. Comma-separated; a backend left out of
+# the list is disabled, so "azure,groq" skips the primary endpoint entirely.
+KNOWN_BACKENDS = ("primary", "azure", "groq")
+LLM_PRIORITY = os.environ.get("LLM_PRIORITY", "primary,azure,groq")
+
+
+def _parse_llm_priority(raw):
+    order = []
+    for name in raw.split(","):
+        name = name.strip().lower()
+        if not name:
+            continue
+        if name not in KNOWN_BACKENDS:
+            logger.warning(f"LLM_PRIORITY: ignoring unknown backend '{name}' (known: {', '.join(KNOWN_BACKENDS)})")
+            continue
+        if name not in order:
+            order.append(name)
+    if not order:
+        logger.warning(f"LLM_PRIORITY: no usable entries in '{raw}', falling back to {','.join(KNOWN_BACKENDS)}")
+        return list(KNOWN_BACKENDS)
+    return order
+
+
+LLM_ORDER = _parse_llm_priority(LLM_PRIORITY)
+
+
+def _log_llm_chain():
+    configured = {"primary": PRIMARY_CONFIGURED, "azure": AZURE_CONFIGURED, "groq": bool(GROQ_API_KEY)}
+    models = {"primary": PRIMARY_MODEL, "azure": AZURE_DEPLOYMENT, "groq": GROQ_MODEL}
+    chain = [f"{n}:{models[n]}" for n in LLM_ORDER if configured[n]]
+    skipped = [n for n in LLM_ORDER if not configured[n]]
+    logger.info(f"LLM backend order: {' -> '.join(chain) if chain else '(none configured)'}")
+    if skipped:
+        logger.info(f"LLM backends listed but not configured, skipped: {', '.join(skipped)}")
+
+
+_log_llm_chain()
+
 LIFECYCLE_SYSTEM_PROMPT = """\
 You are the Red Hat Lifecycle Advisor. Today: {today}
 You ONLY answer questions about Red Hat product lifecycles, support phases, EOL dates, version compatibility, and upgrade planning. If a user asks about anything else (configuration, troubleshooting, installation, general IT advice), politely decline and redirect them to the appropriate Red Hat documentation or support channels. Do not provide step-by-step guides, tutorials, or advice outside of lifecycle topics.
@@ -662,22 +700,35 @@ async def chat_endpoint(req: ChatRequest, request: Request):
 
     log_prefix = f"[chat] {client_ip}"
 
-    def build_backends(step_label):
-        backends = []
-        if PRIMARY_CONFIGURED:
-            primary_hdrs = {"Content-Type": "application/json"}
+    def build_backends():
+        """Backends to try, ordered by LLM_PRIORITY.
+
+        Each entry is (name, resolve, model). `resolve` is deferred so an
+        unreached backend never pays for credential work — notably Azure, whose
+        token fetch is a blocking network call.
+        """
+        def resolve_primary():
+            hdrs = {"Content-Type": "application/json"}
             if PRIMARY_API_KEY:
-                primary_hdrs["Authorization"] = f"Bearer {PRIMARY_API_KEY}"
-            backends.append(("primary", PRIMARY_API_URL, primary_hdrs, PRIMARY_MODEL))
+                hdrs["Authorization"] = f"Bearer {PRIMARY_API_KEY}"
+            return PRIMARY_API_URL, hdrs
+
+        def resolve_azure():
+            token = azure_get_token()
+            return azure_get_chat_url(), {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+        def resolve_groq():
+            return GROQ_API_URL, {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+
+        available = {}
+        if PRIMARY_CONFIGURED:
+            available["primary"] = (resolve_primary, PRIMARY_MODEL)
         if AZURE_CONFIGURED:
-            try:
-                token = azure_get_token()
-                backends.append(("azure", azure_get_chat_url(), {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, AZURE_DEPLOYMENT))
-            except Exception as e:
-                logger.warning(f"{log_prefix} {step_label} Azure token fetch failed: {e}, skipping Azure")
+            available["azure"] = (resolve_azure, AZURE_DEPLOYMENT)
         if GROQ_API_KEY:
-            backends.append(("groq", GROQ_API_URL, {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}, GROQ_MODEL))
-        return backends
+            available["groq"] = (resolve_groq, GROQ_MODEL)
+
+        return [(name, *available[name]) for name in LLM_ORDER if name in available]
 
     async def stream_llm(client, payload, step_label):
         """Stream one LLM turn, trying each backend in priority order.
@@ -686,8 +737,13 @@ async def chat_endpoint(req: ChatRequest, request: Request):
         Content deltas are relayed to the browser immediately, so a backend can only be
         abandoned for the next one while nothing has been emitted yet.
         """
-        for backend_name, url, hdrs, model in build_backends(step_label):
+        for backend_name, resolve, model in build_backends():
             tag = f"[{backend_name}:{model}]"
+            try:
+                url, hdrs = resolve()
+            except Exception as e:
+                logger.warning(f"{log_prefix} {step_label} {tag} unavailable: {e}, trying next backend")
+                continue
             # include_usage makes the backend emit a final chunk carrying token counts,
             # which a plain stream omits.
             backend_payload = {**payload, "model": model, "stream": True, "stream_options": {"include_usage": True}}

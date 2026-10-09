@@ -106,10 +106,11 @@ uvicorn app:app --host 0.0.0.0 --port 8881 --reload
 
 Copy `.env.sample` to `.env` and fill in the values. The dashboard works without AI credentials — the Lifecycle Advisor will simply be disabled.
 
-The Lifecycle Advisor tries backends in order: **primary → Azure → Groq**. The first one configured and responding wins.
+The Lifecycle Advisor tries backends in the order set by `LLM_PRIORITY` (default **primary → Azure → Groq**). The first one configured and responding wins, and a backend left out of the list is disabled entirely.
 
 | Variable | Required | Description |
 | :--- | :--- | :--- |
+| `LLM_PRIORITY` | No | Comma-separated backend order — any of `primary`, `azure`, `groq` (default `primary,azure,groq`) |
 | `PRIMARY_API_URL` | No | Primary LLM endpoint — full URL **including** `/chat/completions`. Setting this enables the primary backend |
 | `PRIMARY_MODEL` | No | Model name for the primary endpoint (default `qwen38-27b`) |
 | `PRIMARY_API_KEY` | No | Bearer token for the primary endpoint — omit if it needs no auth |
