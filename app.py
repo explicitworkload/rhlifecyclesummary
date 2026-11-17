@@ -45,9 +45,6 @@ PRODUCTS_CONFIG = {
     "Red Hat Enterprise Linux": {
         "link": "https://access.redhat.com/support/policy/updates/errata"
     },
-    "Red Hat Enterprise Linux AI": {
-        "link": "https://access.redhat.com/support/policy/updates/rhelai"
-    },
     "Red Hat OpenShift Container Platform": {
         "link": "https://access.redhat.com/support/policy/updates/openshift"
     },
@@ -492,7 +489,7 @@ LIFECYCLE_TOOLS = [
                 "properties": {
                     "product_name": {
                         "type": "string",
-                        "description": "The exact Red Hat product name. Must match one of: 'Red Hat Enterprise Linux', 'Red Hat Enterprise Linux AI', 'Red Hat OpenShift Container Platform', 'Red Hat OpenShift AI Self-Managed', 'Red Hat Ansible Automation Platform', 'Red Hat Quay', 'Red Hat build of Keycloak', 'Red Hat Single Sign-On', 'Red Hat JBoss Enterprise Application Platform', 'Red Hat Data Grid', 'Red Hat Edge Manager', 'Red Hat build of MicroShift', 'Red Hat OpenStack Platform', 'Red Hat Satellite Server'. Use list_products if unsure."
+                        "description": "The exact Red Hat product name. Must match one of: 'Red Hat Enterprise Linux', 'Red Hat OpenShift Container Platform', 'Red Hat OpenShift AI Self-Managed', 'Red Hat Ansible Automation Platform', 'Red Hat Quay', 'Red Hat build of Keycloak', 'Red Hat Single Sign-On', 'Red Hat JBoss Enterprise Application Platform', 'Red Hat Data Grid', 'Red Hat Edge Manager', 'Red Hat build of MicroShift', 'Red Hat OpenStack Platform', 'Red Hat Satellite Server'. Use list_products if unsure."
                     },
                     "version": {
                         "type": "string",

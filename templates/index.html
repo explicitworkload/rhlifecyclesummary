@@ -577,7 +577,6 @@
                     const nameLower = prod.product_name.toLowerCase();
                     const isRhoso = nameLower.includes("openstack services on openshift");
                     const isOpenstack = nameLower.includes("openstack platform") || (nameLower.includes("openstack") && !isRhoso);
-                    const isRhelAi = nameLower === "red hat enterprise linux ai";
                     const isRhel = nameLower === "red hat enterprise linux";
                     const isAap = nameLower.includes("ansible automation platform");
                     const isRhoai = nameLower.includes("openshift ai");
@@ -640,8 +639,6 @@
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Third-Party Cert">${v.third_party}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS Add-On">${els1Val}</td><td data-label="ELS Term 2">${els2Val}</td><td data-label="ELS Term 3">${els3Val}</td></tr>`;
                         } else if (isRhoso) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="OCP Aligned">${v.ocp_aligned}</td><td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELS Add-On">${v.els}</td></tr>`;
-                        } else if (isRhelAi) {
-                            tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="End of Life">${v.eol}</td></tr>`;
                         } else if (isRhel) {
                             tableRows += `<tr class="${rowClass}">${versionCell}${statusCell}<td data-label="General Availability">${v.ga}</td><td data-label="Full Support">${v.full}</td><td data-label="Maintenance">${v.maint}</td><td data-label="ELC">${v.elc}</td><td data-label="Long-Life">${v.long_life}</td><td data-label="Final Minor">${v.final_minor}</td></tr>`;
                         } else if (isAap) {
@@ -680,8 +677,6 @@
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Third-Party Certification</th><th>Maintenance Support</th><th>ELS Add-On</th><th>ELS Term 2 Add-On</th><th>ELS Term 3 Add-On</th>`;
                     } else if (isRhoso) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>OCP Control Plane</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>ELS Add-On</th>`;
-                    } else if (isRhelAi) {
-                        tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>End of Life</th>`;
                     } else if (isRhel) {
                         tableHeaders = `<th>Version</th><th>Status</th><th>General Availability</th><th>Full Support</th><th>Maintenance Support</th><th>Extended Life Cycle (ELC)</th><th>Long-Life Add-On</th><th>Final Minor Release</th>`;
                     } else if (isAap) {
